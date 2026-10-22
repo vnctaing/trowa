@@ -6,6 +6,8 @@ const FRAMES_PER_SEC = 100;
 const MIN_BLIP_SEC = 0.05;
 const TAIL_GAP_SEC = 0.02;
 const TAIL_AMPLITUDE_RATIO = 0.85;
+const FRAGMENT_SIXTEENTHS = 2;
+const FRAGMENT_GAP_SEC = 0.05;
 const REVEALED_AFTER_SEC = 0.15;
 const REVEALED_MIN_SEC = 0.25;
 const SHORT_NOTE_FRACTION_OF_16TH = 0.75;
@@ -88,26 +90,52 @@ export function reduceToLine(detected: readonly DetectedNote[], transpose: numbe
   return line;
 }
 
-export function applyDifficulty(
-  line: readonly DetectedNote[],
-  difficulty: Options['difficulty'],
-  sixteenthSec: number,
-): MelodyNote[] {
-  const isShort = (x: DetectedNote) => x.durSec < sixteenthSec * SHORT_NOTE_FRACTION_OF_16TH;
+type Simplification = (line: readonly DetectedNote[], sixteenthSec: number) => DetectedNote[];
+
+const isShort = (note: DetectedNote, sixteenthSec: number) => note.durSec < sixteenthSec * SHORT_NOTE_FRACTION_OF_16TH;
+
+const mergeFragments: Simplification = (line, sixteenthSec) => {
+  const out: DetectedNote[] = [];
+  for (const note of line) {
+    const prev = out.at(-1);
+    const isFragment =
+      prev !== undefined &&
+      prev.midi === note.midi &&
+      note.onsetSec - (prev.onsetSec + prev.durSec) < FRAGMENT_GAP_SEC &&
+      note.durSec < sixteenthSec * FRAGMENT_SIXTEENTHS;
+    if (isFragment) prev.durSec = note.onsetSec + note.durSec - prev.onsetSec;
+    else out.push({ ...note });
+  }
+  return out;
+};
+
+const dropShortNotes: Simplification = (line, sixteenthSec) => line.filter((note) => !isShort(note, sixteenthSec));
+
+const MELODY: readonly Simplification[] = [mergeFragments, dropShortNotes];
+
+function withGraceNotes(line: readonly DetectedNote[], sixteenthSec: number): MelodyNote[] {
   const out: MelodyNote[] = [];
   line.forEach((note, i) => {
-    if (!isShort(note)) {
+    if (!isShort(note, sixteenthSec)) {
       out.push(note);
       return;
     }
-    if (difficulty === 'melody') return;
     const next = line[i + 1];
     const leadsIntoNext =
       next !== undefined &&
-      !isShort(next) &&
+      !isShort(next, sixteenthSec) &&
       next.midi !== note.midi &&
       next.onsetSec - (note.onsetSec + note.durSec) < sixteenthSec;
     if (leadsIntoNext) out.push({ ...note, ornament: 'grace' });
   });
   return out;
+}
+
+export function applyDifficulty(
+  line: readonly DetectedNote[],
+  difficulty: Options['difficulty'],
+  sixteenthSec: number,
+): MelodyNote[] {
+  if (difficulty === 'ornaments') return withGraceNotes(line, sixteenthSec);
+  return MELODY.reduce<DetectedNote[]>((notes, simplify) => simplify(notes, sixteenthSec), [...line]);
 }

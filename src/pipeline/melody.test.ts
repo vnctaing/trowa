@@ -110,4 +110,17 @@ describe('applyDifficulty', () => {
       [64, undefined],
     ]);
   });
+
+  it("joins same-pitch fragments shorter than an eighth into one held note in 'melody'", () => {
+    const held = [n(64, 1.0, 0.25), n(64, 1.28, 0.2), n(64, 1.51, 0.22), n(64, 1.76, 0.2), n(67, 2.0, 0.6)];
+    expect(applyDifficulty(held, 'melody', sixteenth).map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
+      [64, 1.0, 0.96],
+      [67, 2.0, 0.6],
+    ]);
+  });
+
+  it("keeps same-pitch quarter notes as separate notes in 'melody'", () => {
+    const repeated = [n(60, 0, 0.6), n(60, 0.6, 0.55), n(62, 1.2, 0.6)];
+    expect(pitches(applyDifficulty(repeated, 'melody', sixteenth))).toEqual([60, 60, 62]);
+  });
 });
