@@ -1,0 +1,28 @@
+{
+  "name": "trowa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js --dev",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0",
+    "@fontsource/urbanist": "^5.3.0",
+    "@spotify/basic-pitch": "^1.0.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "jspdf": "^4.2.1",
+    "opensheetmusicdisplay": "^2.2.1",
+    "svg2pdf.js": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
