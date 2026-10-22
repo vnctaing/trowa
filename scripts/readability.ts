@@ -141,6 +141,7 @@ function report(fixture: string, score: Score, xml: string) {
     pctWhole: byType('whole'),
     pctDotted: pct(sounding.filter((h) => h.dotted).length, sounding.length),
     tiesPerBar: Math.round((100 * sounding.filter((h) => h.tieStart).length) / Math.max(1, bars)) / 100,
+    symbolsPerBar: Math.round((100 * heads.length) / Math.max(1, bars)) / 100,
     restsPerBar: Math.round((100 * heads.filter((h) => h.rest).length) / Math.max(1, bars)) / 100,
     octaveJumps: octaveJumpsInPhrases(score.notes),
     rangeLow: pitches.length ? nameOf(Math.min(...pitches)) : '-',
@@ -206,7 +207,7 @@ for (const fixture of fixtures) {
     const short = row.pct16th + row.pct8th;
     console.log(
       [row.fixture.padEnd(26), `bpm ${row.bpm}`, `key ${row.keyFifths}`, `bars ${row.bars}`, `heads ${row.heads}`, `med ${row.headsPerBarMedian}`, `max ${row.headsPerBarMax}`,
-        `16th ${row.pct16th}%`, `<=8th ${Math.round(short * 10) / 10}%`, `ties ${row.tiesPerBar}`, `rests ${row.restsPerBar}`, `oct ${row.octaveJumps}`,
+        `16th ${row.pct16th}%`, `<=8th ${Math.round(short * 10) / 10}%`, `ties ${row.tiesPerBar}`, `sym/bar ${row.symbolsPerBar}`, `rests ${row.restsPerBar}`, `oct ${row.octaveJumps}`,
         row.openingEdit === null ? '' : `edit ${row.openingEdit}/${row.bestWindowEdit}`, row.twinkleExact === null ? '' : `twinkle ${row.twinkleExact}`].join('  '),
     );
     continue;

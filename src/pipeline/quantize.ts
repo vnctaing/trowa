@@ -2,9 +2,9 @@ import { TICKS_PER_QUARTER, type QuantizedNote, type Score } from '../domain';
 import type { MelodyNote } from './melody';
 
 export type Meter = Pick<Score, 'beatsPerBar' | 'beatUnit'>;
-export type Notation = { gridTicks: 1 | 2; holdOffbeatRepeats: boolean };
+export type Notation = { gridTicks: 1 | 2; holdOffbeatRepeats: boolean; legatoTicks: number };
 
-const DETAILED: Notation = { gridTicks: 1, holdOffbeatRepeats: false };
+const DETAILED: Notation = { gridTicks: 1, holdOffbeatRepeats: false, legatoTicks: 0 };
 
 const ENVELOPE_STEP_SEC = 0.005;
 const ONSET_SPREAD_SEC = 0.02;
@@ -66,7 +66,7 @@ export function estimateTempo(onsetsSec: readonly number[]): number {
   return Math.round(bpm * 100) / 100;
 }
 
-export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks, holdOffbeatRepeats }: Notation = DETAILED): QuantizedNote[] {
+export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks, holdOffbeatRepeats, legatoTicks }: Notation = DETAILED): QuantizedNote[] {
   const principal = notes.filter((x) => x.ornament !== 'grace');
   const first = principal[0];
   if (first === undefined) return [];
@@ -109,7 +109,8 @@ export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks,
     let end = nextStart === undefined ? note.end : Math.min(note.end, nextStart);
     const articulationTarget = nextStart ?? Math.ceil(end / TICKS_PER_QUARTER) * TICKS_PER_QUARTER;
     const gap = articulationTarget - end;
-    if (gap > 0 && gap <= TICKS_PER_QUARTER && gap < Math.max(2, (end - note.start) / 2)) {
+    const detached = gap <= TICKS_PER_QUARTER && gap < Math.max(2, (end - note.start) / 2);
+    if (gap > 0 && (gap <= legatoTicks || detached)) {
       end = articulationTarget;
     }
     for (const grace of note.graces) {

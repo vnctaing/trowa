@@ -77,15 +77,27 @@ describe('quantize', () => {
 
   it('on an eighth-note grid, writes 16th-offset onsets and lengths as eighths', () => {
     const notes = [m(60, 0, 0.42), m(62, 0.42, 0.75), m(64, 1.17, 1.2)];
-    expect(timeline(quantize(notes, 100, { gridTicks: 2, holdOffbeatRepeats: false }))).toEqual([
+    expect(timeline(quantize(notes, 100, { gridTicks: 2, holdOffbeatRepeats: false, legatoTicks: 0 }))).toEqual([
       [60, 0, 2],
       [62, 2, 6],
       [64, 8, 8],
     ]);
   });
 
+  it('with a one-beat legato, extends a note over a rest of up to a beat', () => {
+    const notes = [m(60, 0, 0.3), m(62, 0.6, 0.55), m(64, 2.1, 0.55)];
+    const legato = { gridTicks: 2, holdOffbeatRepeats: false, legatoTicks: 4 } as const;
+    expect(timeline(quantize(notes, 100, legato))).toEqual([
+      [60, 0, 4],
+      [62, 4, 4],
+      [null, 8, 6],
+      [64, 14, 6],
+    ]);
+    expect(timeline(quantize(notes, 100))).toContainEqual([null, 2, 2]);
+  });
+
   describe('when holding off-beat repeats', () => {
-    const melody = { gridTicks: 2, holdOffbeatRepeats: true } as const;
+    const melody = { gridTicks: 2, holdOffbeatRepeats: true, legatoTicks: 0 } as const;
 
     it('holds a note through a contiguous same-pitch re-onset that falls off the beat', () => {
       const notes = [m(60, 0, 0.9), m(60, 0.9, 0.3), m(62, 1.2, 0.6)];
