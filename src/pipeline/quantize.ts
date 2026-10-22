@@ -1,0 +1,136 @@
+import { TICKS_PER_QUARTER, type QuantizedNote, type Score } from '../domain';
+import type { MelodyNote } from './melody';
+
+export type Meter = Pick<Score, 'beatsPerBar' | 'beatUnit'>;
+
+const ENVELOPE_STEP_SEC = 0.005;
+const ONSET_SPREAD_SEC = 0.02;
+const MIN_BPM = 50;
+const MAX_BPM = 200;
+const PREFERRED_BPM = 110;
+const PHASE_LOCK_GAIN = 0.1;
+const TRIPLE_METER_MARGIN = 1.25;
+
+export function sixteenthSec(bpm: number): number {
+  return 60 / bpm / TICKS_PER_QUARTER;
+}
+
+function onsetEnvelope(onsetsSec: readonly number[]): Float64Array {
+  const first = Math.min(...onsetsSec);
+  const spread = ONSET_SPREAD_SEC / ENVELOPE_STEP_SEC;
+  const radius = Math.ceil(spread * 3);
+  const length = Math.ceil((Math.max(...onsetsSec) - first) / ENVELOPE_STEP_SEC) + radius * 2 + 1;
+  const env = new Float64Array(length);
+  for (const onset of onsetsSec) {
+    const center = (onset - first) / ENVELOPE_STEP_SEC + radius;
+    for (let i = Math.floor(center - radius); i <= Math.ceil(center + radius); i++) {
+      env[i] = env[i]! + Math.exp(-0.5 * ((i - center) / spread) ** 2);
+    }
+  }
+  return env;
+}
+
+function autocorrelation(env: Float64Array, lag: number): number {
+  let sum = 0;
+  for (let i = 0; i + lag < env.length; i++) sum += env[i]! * env[i + lag]!;
+  return sum;
+}
+
+export function estimateTempo(onsetsSec: readonly number[]): number {
+  if (onsetsSec.length < 2) return PREFERRED_BPM;
+  const env = onsetEnvelope(onsetsSec);
+  const minLag = Math.floor(60 / MAX_BPM / ENVELOPE_STEP_SEC);
+  const maxLag = Math.ceil(60 / MIN_BPM / ENVELOPE_STEP_SEC);
+  const scores: number[] = [];
+  for (let lag = 0; lag <= maxLag + 1; lag++) {
+    if (lag < minLag - 1) {
+      scores.push(0);
+      continue;
+    }
+    const bpm = 60 / (lag * ENVELOPE_STEP_SEC);
+    const prior = Math.exp(-0.5 * (Math.log2(bpm / PREFERRED_BPM) / 0.9) ** 2);
+    scores.push(autocorrelation(env, lag) * prior);
+  }
+  let best = minLag;
+  for (let lag = minLag; lag <= maxLag; lag++) if (scores[lag]! > scores[best]!) best = lag;
+
+  const left = scores[best - 1] ?? 0;
+  const right = scores[best + 1] ?? 0;
+  const curvature = left - 2 * scores[best]! + right;
+  const offset = curvature === 0 ? 0 : (0.5 * (left - right)) / curvature;
+  const bpm = 60 / ((best + offset) * ENVELOPE_STEP_SEC);
+  return Math.round(bpm * 100) / 100;
+}
+
+export function quantize(notes: readonly MelodyNote[], bpm: number): QuantizedNote[] {
+  const principal = notes.filter((x) => x.ornament !== 'grace');
+  const first = principal[0];
+  if (first === undefined) return [];
+  const step = sixteenthSec(bpm);
+  let origin = first.onsetSec;
+
+  type Placed = { midi: MelodyNote['midi']; start: number; end: number; graces: MelodyNote[] };
+  const placed: Placed[] = [];
+  let pendingGraces: MelodyNote[] = [];
+  for (const note of notes) {
+    if (note.ornament === 'grace') {
+      pendingGraces.push(note);
+      continue;
+    }
+    const exact = (note.onsetSec - origin) / step;
+    const prev = placed[placed.length - 1];
+    const start = Math.max(Math.round(exact), prev ? prev.start + 1 : 0);
+    origin += PHASE_LOCK_GAIN * (note.onsetSec - (origin + start * step));
+    const end = Math.max(start + 1, Math.round((note.onsetSec + note.durSec - origin) / step));
+    placed.push({ midi: note.midi, start, end, graces: pendingGraces });
+    pendingGraces = [];
+  }
+
+  const out: QuantizedNote[] = [];
+  placed.forEach((note, i) => {
+    const nextStart = placed[i + 1]?.start;
+    let end = nextStart === undefined ? note.end : Math.min(note.end, nextStart);
+    const articulationTarget = nextStart ?? Math.ceil(end / TICKS_PER_QUARTER) * TICKS_PER_QUARTER;
+    const gap = articulationTarget - end;
+    if (gap > 0 && gap <= TICKS_PER_QUARTER && gap < Math.max(2, (end - note.start) / 2)) {
+      end = articulationTarget;
+    }
+    for (const grace of note.graces) {
+      out.push({ midi: grace.midi, startTick: note.start, durTicks: 0, ornament: 'grace' });
+    }
+    out.push({ midi: note.midi, startTick: note.start, durTicks: end - note.start });
+    if (nextStart !== undefined && nextStart > end) {
+      out.push({ midi: null, startTick: end, durTicks: nextStart - end });
+    }
+  });
+  return out;
+}
+
+function downbeatStrength(notes: readonly QuantizedNote[], barTicks: number, phaseStep: number): number {
+  const weight = new Array<number>(barTicks).fill(0);
+  let total = 0;
+  for (const note of notes) {
+    if (note.midi === null || note.durTicks === 0) continue;
+    const w = Math.min(note.durTicks, barTicks);
+    weight[note.startTick % barTicks]! += w;
+    total += w;
+  }
+  if (total === 0) return 0;
+  let best = 0;
+  for (let phase = 0; phase < barTicks; phase += phaseStep) best = Math.max(best, weight[phase]!);
+  return (best / total) * (barTicks / TICKS_PER_QUARTER);
+}
+
+function positionWeight(notes: readonly QuantizedNote[], barTicks: number, positions: number[]): number {
+  return notes
+    .filter((x) => x.midi !== null && positions.includes(x.startTick % barTicks))
+    .reduce((s, x) => s + x.durTicks, 0);
+}
+
+export function guessMeter(notes: readonly QuantizedNote[]): Meter {
+  const quadruple = downbeatStrength(notes, 16, 2);
+  const triple = downbeatStrength(notes, 12, 2);
+  if (triple <= quadruple * TRIPLE_METER_MARGIN) return { beatsPerBar: 4, beatUnit: 4 };
+  const compound = positionWeight(notes, 12, [6]) > positionWeight(notes, 12, [4, 8]);
+  return compound ? { beatsPerBar: 6, beatUnit: 8 } : { beatsPerBar: 3, beatUnit: 4 };
+}
