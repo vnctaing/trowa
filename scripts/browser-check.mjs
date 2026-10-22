@@ -1,0 +1,12 @@
+import puppeteer from 'puppeteer-core';
+const [url, shot] = process.argv.slice(2);
+const chrome = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const browser = await puppeteer.launch({ executablePath: chrome, headless: true, protocolTimeout: 0, args: ['--enable-unsafe-swiftshader'] });
+const page = await browser.newPage();
+await page.setViewport({ width: 1040, height: 900 });
+page.on('console', (m) => console.log(`console.${m.type()}: ${m.text()}`));
+page.on('pageerror', (e) => console.log(`pageerror: ${e.message}`));
+await page.goto(url);
+await page.waitForFunction('window.__done === true', { timeout: 30 * 60_000, polling: 500 });
+if (shot) await page.screenshot({ path: shot, fullPage: true });
+await browser.close();
