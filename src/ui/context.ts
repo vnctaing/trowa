@@ -9,7 +9,6 @@ export type AppContext = {
   pipeline: Pipeline;
   field: FieldHost;
   audio: () => AudioContext;
-  reducedMotion: boolean;
 };
 
 export type ScreenOf<K extends UiState['screen']> = Extract<UiState, { screen: K }>;

@@ -68,6 +68,13 @@ const FAILURES: readonly [string, ConstructorParameters<typeof TrowaError>[0]][]
   ['offline', 'network'],
 ];
 
+const FAKE_THUMBNAIL = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="#2b3550"/><stop offset="1" stop-color="#7a5a2a"/></linearGradient></defs>' +
+    '<rect width="160" height="90" fill="url(#g)"/><text x="80" y="58" font-family="Georgia" font-size="34" ' +
+    'text-anchor="middle" fill="#f7f3ea" font-style="italic">IX</text></svg>',
+)}`;
+
 const VIDEO_ID = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/;
 
 export async function lookupYoutube(url: string, signal?: AbortSignal): Promise<YoutubeInfo> {
@@ -80,7 +87,7 @@ export async function lookupYoutube(url: string, signal?: AbortSignal): Promise<
     videoId,
     title: url.includes('dense') ? 'Ode to Joy (full orchestra, live)' : 'Ode to Joy',
     author: 'Ludwig van Beethoven',
-    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    thumbnail: FAKE_THUMBNAIL,
     durationSec: 32,
   };
 }
@@ -140,7 +147,7 @@ export async function runPipeline(
   onEvent: (e: PipelineEvent) => void,
   signal?: AbortSignal,
 ): Promise<Score> {
-  const stageMs = Number(param('fakeMs') ?? 3200);
+  const stageMs = Number(param('fakeMs') ?? 4500);
   const text = sourceText(source);
   const base: Score = {
     title: source.title,

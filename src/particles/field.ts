@@ -5,6 +5,7 @@ const BACKGROUND = '#0B0D12';
 const SPRITE_COLORS = ['#4F5E82', '#9AA9CB', '#EFE6D2', '#E8B44A'] as const;
 const SPRITE_PX = 32;
 const STAGGER_MS = 260;
+const CALM_BAND = 0.3;
 
 export type FieldConfig = { reducedMotion: boolean; count: number };
 
@@ -43,8 +44,8 @@ export class ParticleField {
   private readonly fromY: Float32Array;
   private readonly fromA: Float32Array;
   private readonly placed: Placed = { x: 0, y: 0, alpha: 0 };
-  private readonly sample: Sample = { i: 0, t: 0, since: 0, energy: 0, band: 0 };
-  private readonly idleSpectrum: Spectrum = { level: 0, bands: new Float32Array(BANDS) };
+  private readonly sample: Sample = { i: 0, t: 0, since: 0, band: 0 };
+  private readonly idleSpectrum: Spectrum = { bands: new Float32Array(BANDS) };
   private readonly observer: ResizeObserver;
   private geometry: Geometry = { w: 1, h: 1 };
   private formation: Formation = { kind: 'idle' };
@@ -55,6 +56,7 @@ export class ParticleField {
   private frame = 0;
   private frames = 0;
   private fpsWindowStart = performance.now();
+  private drawMs = 0;
   fps = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly config: FieldConfig) {
@@ -69,15 +71,12 @@ export class ParticleField {
     this.fromX = new Float32Array(n);
     this.fromY = new Float32Array(n);
     this.fromA = new Float32Array(n);
+    canvas.dataset.particles = String(n);
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
     this.resize();
     this.settleAt(this.formation);
     this.frame = requestAnimationFrame(this.tick);
-  }
-
-  get count(): number {
-    return this.config.count;
   }
 
   listen(listener: TrackListener | null): void {
@@ -126,7 +125,6 @@ export class ParticleField {
     if (this.listener) return this.listener.read();
     const s = this.idleSpectrum;
     const t = now / 1000;
-    s.level = 0.12 + 0.05 * Math.sin(t * 0.9);
     for (let b = 0; b < BANDS; b++) s.bands[b] = 0.1 + 0.08 * Math.sin(t * (0.7 + b * 0.23) + b);
     return s;
   }
@@ -137,10 +135,13 @@ export class ParticleField {
     if (now - this.fpsWindowStart >= 1000) {
       this.fps = (this.frames * 1000) / (now - this.fpsWindowStart);
       this.canvas.dataset.fps = this.fps.toFixed(1);
+      this.canvas.dataset.drawMs = this.drawMs.toFixed(2);
       this.frames = 0;
       this.fpsWindowStart = now;
     }
+    const started = performance.now();
     this.draw(now);
+    this.drawMs += (performance.now() - started - this.drawMs) * 0.05;
   };
 
   private draw(now: number): void {
@@ -162,11 +163,10 @@ export class ParticleField {
     const reactivity = reduced ? 0 : this.current.reactivity;
     sample.t = t;
     sample.since = reduced ? 60 : elapsed / 1000;
-    sample.energy = spectrum.level;
     const span = this.durationMs + (reduced ? 0 : STAGGER_MS);
 
     for (let i = 0; i < config.count; i++) {
-      const band = spectrum.bands[i % BANDS] ?? 0;
+      const band = reduced ? CALM_BAND : (spectrum.bands[i % BANDS] ?? 0);
       sample.i = i;
       sample.band = band;
       this.current.place(sample, seeds, out);
@@ -204,7 +204,7 @@ export class ParticleField {
   private drawParticle(x: number, y: number, alpha: number, band: number, seed: number, reactivity: number): void {
     if (alpha < 0.01) return;
     const lum = Math.min(1, alpha * (0.6 + band * 0.9));
-    const bucket = lum < 0.32 ? 0 : lum < 0.62 ? 1 : lum > 0.8 && seed > 0.7 ? 3 : 2;
+    const bucket = lum < 0.3 ? 0 : lum < 0.6 ? 1 : lum > 0.78 && seed > 0.88 ? 3 : 2;
     const size = (1.6 + 2.4 * seed) * (1 + band * 0.7 * reactivity) * 3;
     this.ctx.globalAlpha = Math.min(1, alpha);
     this.ctx.drawImage(this.sprites[bucket]!, x - size / 2, y - size / 2, size, size);

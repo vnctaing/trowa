@@ -3,6 +3,7 @@ import { el } from '../dom';
 import { ERROR_COPY } from '../errors';
 
 export const mountError: Mount<'error'> = (root, state, ctx) => {
+  void ctx.field.release(600);
   const copy = ERROR_COPY[state.kind];
   const back = el('button', {
     class: 'btn',

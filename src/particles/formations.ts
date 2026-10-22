@@ -25,7 +25,6 @@ export type Sample = {
   i: number;
   t: number;
   since: number;
-  energy: number;
   band: number;
 };
 
@@ -66,7 +65,7 @@ const cloud: Spec<{ kind: 'cloud' }> = {
       const rad = r * Math.sqrt(rb) * (0.75 + 0.55 * s.band) + Math.sin(s.t * 1.3 + rd * 20) * r * 0.06;
       out.x = w / 2 + Math.cos(angle) * rad * 1.35;
       out.y = h / 2 + Math.sin(angle) * rad * 0.95;
-      out.alpha = 0.22 + 0.7 * s.band * (0.4 + rc);
+      out.alpha = 0.16 + 0.55 * s.band * (0.3 + rc);
     };
   },
 };
@@ -140,8 +139,8 @@ const lanes: Spec<{ kind: 'lanes'; notes: readonly DetectedNote[] }> = {
 };
 
 export function staffMetrics({ w, h }: Geometry) {
-  const gap = Math.max(9, Math.min(h * 0.045, w * 0.028, 26));
-  const left = Math.max(16, w * 0.1);
+  const gap = Math.max(9, Math.min(h * 0.045, w * 0.05, 26));
+  const left = Math.max(16, w * (w < 700 ? 0.05 : 0.1));
   const right = w - left;
   const bottom = h / 2 + gap * 2;
   return { gap, left, right, bottom, lineY: (k: number) => bottom - k * gap };
@@ -150,19 +149,23 @@ export function staffMetrics({ w, h }: Geometry) {
 const SHARP_STEPS = [8, 5, 9, 6, 3, 7, 4];
 const FLAT_STEPS = [4, 7, 3, 6, 2, 5, 1];
 
-function drawStaff(ctx: CanvasRenderingContext2D, d: StaffDrawing, g: Geometry, scale: number): void {
+type Layer = 'lines' | 'glyphs';
+
+function drawStaff(ctx: CanvasRenderingContext2D, d: StaffDrawing, g: Geometry, scale: number, layer: Layer): void {
   const { gap, left, right, bottom, lineY } = staffMetrics(g);
   ctx.save();
   ctx.scale(scale, scale);
   ctx.strokeStyle = '#fff';
   ctx.fillStyle = '#fff';
-  ctx.lineWidth = Math.max(1, gap * 0.09);
+  ctx.lineWidth = Math.max(1, gap * 0.07);
+  ctx.globalAlpha = layer === 'lines' ? 1 : 0;
   for (let k = 0; k < 5; k++) {
     ctx.beginPath();
     ctx.moveTo(left, lineY(k));
     ctx.lineTo(right, lineY(k));
     ctx.stroke();
   }
+  ctx.globalAlpha = layer === 'glyphs' ? 1 : 0;
   let x = left + gap * 0.6;
   if (d.meter) {
     ctx.font = `${gap * 6.2}px "Apple Symbols", "Noto Music", "Segoe UI Symbol", serif`;
@@ -187,12 +190,10 @@ function drawStaff(ctx: CanvasRenderingContext2D, d: StaffDrawing, g: Geometry, 
   }
   if (d.barlines) {
     ctx.lineWidth = Math.max(1.2, gap * 0.12);
-    for (const bx of [right]) {
-      ctx.beginPath();
-      ctx.moveTo(bx, lineY(4));
-      ctx.lineTo(bx, lineY(0));
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(right, lineY(4));
+    ctx.lineTo(right, lineY(0));
+    ctx.stroke();
   }
   const startX = x + gap;
   const width = right - gap * 1.5 - startX;
@@ -239,7 +240,7 @@ function drawStaff(ctx: CanvasRenderingContext2D, d: StaffDrawing, g: Geometry, 
 
 const RASTER_SCALE = 0.5;
 
-function rasterize(d: StaffDrawing, g: Geometry): Float32Array {
+function rasterize(d: StaffDrawing, g: Geometry, layer: Layer): Float32Array {
   const cw = Math.max(1, Math.ceil(g.w * RASTER_SCALE));
   const ch = Math.max(1, Math.ceil(g.h * RASTER_SCALE));
   const canvas = document.createElement('canvas');
@@ -247,7 +248,7 @@ function rasterize(d: StaffDrawing, g: Geometry): Float32Array {
   canvas.height = ch;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return new Float32Array();
-  drawStaff(ctx, d, g, RASTER_SCALE);
+  drawStaff(ctx, d, g, RASTER_SCALE, layer);
   const { data } = ctx.getImageData(0, 0, cw, ch);
   const points: number[] = [];
   for (let y = 0; y < ch; y++) {
@@ -258,12 +259,17 @@ function rasterize(d: StaffDrawing, g: Geometry): Float32Array {
   return Float32Array.from(points);
 }
 
+const LINE_SHARE = 0.38;
+
 const staff: Spec<{ kind: 'staff'; drawing: StaffDrawing }> = {
   reactivity: 0.06,
   prepare: ({ drawing }, g) => {
-    const points = rasterize(drawing, g);
-    const count = points.length / 2;
-    return (s, { a, b, c }, out) => {
+    const lines = rasterize(drawing, g, 'lines');
+    const glyphs = rasterize(drawing, g, 'glyphs');
+    return (s, { a, b, c, d }, out) => {
+      const onLine = glyphs.length === 0 || pick(d, s.i) < LINE_SHARE;
+      const points = onLine ? lines : glyphs;
+      const count = points.length / 2;
       if (count === 0) {
         out.x = g.w / 2;
         out.y = g.h / 2;
@@ -273,7 +279,7 @@ const staff: Spec<{ kind: 'staff'; drawing: StaffDrawing }> = {
       const k = Math.floor(pick(a, s.i) * count);
       out.x = (points[k * 2] ?? 0) + (pick(b, s.i) - 0.5) * 1.6;
       out.y = (points[k * 2 + 1] ?? 0) + (pick(c, s.i) - 0.5) * 1.6;
-      out.alpha = 0.7 + 0.3 * pick(b, s.i);
+      out.alpha = (onLine ? 0.3 : 0.45) + 0.3 * pick(b, s.i);
     };
   },
 };

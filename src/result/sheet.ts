@@ -1,13 +1,8 @@
-import { OpenSheetMusicDisplay, type GraphicalNote } from 'opensheetmusicdisplay';
+import { OpenSheetMusicDisplay, VexFlowGraphicalNote } from 'opensheetmusicdisplay';
 import { TICKS_PER_QUARTER } from '../domain';
 
 const TICKS_PER_WHOLE = TICKS_PER_QUARTER * 4;
 const PLAYING_CLASS = 'is-playing';
-
-function svgGroup(note: GraphicalNote): SVGGElement | null {
-  const candidate = note as GraphicalNote & { getSVGGElement?: () => SVGGElement | undefined };
-  return candidate.getSVGGElement?.() ?? null;
-}
 
 export class ScoreSheet {
   private readonly osmd: OpenSheetMusicDisplay;
@@ -15,7 +10,7 @@ export class ScoreSheet {
   private step = -1;
   private lit: SVGGElement[] = [];
 
-  constructor(container: HTMLElement) {
+  constructor(private readonly container: HTMLElement) {
     this.osmd = new OpenSheetMusicDisplay(container, {
       backend: 'svg',
       autoResize: true,
@@ -32,6 +27,7 @@ export class ScoreSheet {
 
   async render(musicXml: string): Promise<void> {
     await this.osmd.load(musicXml);
+    this.osmd.zoom = Math.min(1, Math.max(0.55, this.container.clientWidth / 860));
     this.osmd.render();
     this.stepTicks = this.collectSteps();
     this.step = -1;
@@ -68,7 +64,9 @@ export class ScoreSheet {
       this.step++;
     }
     this.unlight();
-    this.lit = cursor.GNotesUnderCursor().flatMap((n) => svgGroup(n) ?? []);
+    this.lit = cursor
+      .GNotesUnderCursor()
+      .flatMap((n) => (n instanceof VexFlowGraphicalNote ? [n.getSVGGElement()] : []));
     for (const g of this.lit) g.classList.add(PLAYING_CLASS);
   }
 

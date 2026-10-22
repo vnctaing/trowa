@@ -139,6 +139,7 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
       const xml = next.musicXml;
       void sheet.render(xml).then(() => {
         if (xml === renderedXml) viewport.classList.remove('is-rendering');
+        void ctx.field.release(1000);
       });
     }
   };

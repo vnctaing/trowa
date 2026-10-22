@@ -1,12 +1,12 @@
 export const BANDS = 8;
 
-export type Spectrum = { level: number; bands: Float32Array };
+export type Spectrum = { bands: Float32Array };
 
 export class TrackListener {
   private readonly analyser: AnalyserNode;
   private readonly gain: GainNode;
   private readonly bins: Uint8Array<ArrayBuffer>;
-  private readonly spectrum: Spectrum = { level: 0, bands: new Float32Array(BANDS) };
+  private readonly spectrum: Spectrum = { bands: new Float32Array(BANDS) };
   private source: AudioBufferSourceNode | null = null;
 
   constructor(private readonly ctx: AudioContext, private readonly volume: number) {
@@ -47,13 +47,11 @@ export class TrackListener {
 
   read(): Spectrum {
     if (!this.source) {
-      this.spectrum.level *= 0.95;
       this.spectrum.bands.forEach((v, i) => (this.spectrum.bands[i] = v * 0.95));
       return this.spectrum;
     }
     this.analyser.getByteFrequencyData(this.bins);
     const usable = Math.floor(this.bins.length * 0.7);
-    let total = 0;
     for (let b = 0; b < BANDS; b++) {
       const from = Math.round(usable ** (b / BANDS));
       const to = Math.max(from + 1, Math.round(usable ** ((b + 1) / BANDS)));
@@ -62,10 +60,7 @@ export class TrackListener {
       const v = sum / (to - from) / 255;
       const prev = this.spectrum.bands[b] ?? 0;
       this.spectrum.bands[b] = prev + (v - prev) * (v > prev ? 0.5 : 0.12);
-      total += v;
     }
-    const level = total / BANDS;
-    this.spectrum.level += (level - this.spectrum.level) * 0.2;
     return this.spectrum;
   }
 }

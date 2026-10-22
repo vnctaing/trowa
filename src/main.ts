@@ -24,8 +24,6 @@ function prefersReducedMotion(): boolean {
   return params.has('reducedMotion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-const FIELD_SCREENS: ReadonlySet<UiState['screen']> = new Set(['input', 'translating']);
-
 function mountScreen(root: HTMLElement, state: UiState, ctx: AppContext): View<UiState> {
   switch (state.screen) {
     case 'input': {
@@ -63,7 +61,6 @@ async function boot(): Promise<void> {
     pipeline: await loadPipeline(),
     field: new FieldHost(canvas, reducedMotion),
     audio: () => (audio ??= new AudioContext()),
-    reducedMotion,
   };
 
   function dispatch(action: Action): void {
@@ -74,7 +71,6 @@ async function boot(): Promise<void> {
     document.documentElement.dataset.screen = next.screen;
     if (!view || prev.screen !== next.screen) {
       view?.unmount();
-      if (!FIELD_SCREENS.has(next.screen)) void ctx.field.release(1000);
       view = mountScreen(root!, next, ctx);
     } else {
       view.update(next);

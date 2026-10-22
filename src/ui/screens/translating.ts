@@ -6,7 +6,7 @@ import { el } from '../dom';
 import { classify } from '../errors';
 import { firstMeasure, measureTicks } from '../music';
 
-const CLOUD_BEFORE_NEBULA_MS = 2400;
+const CLOUD_BEFORE_NEBULA_MS = 1600;
 const LANDING_MS = 1500;
 const LANDING_HOLD_MS = 1300;
 const TRACK_VOLUME = 0.12;
@@ -131,12 +131,12 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
     const index = STAGES.findIndex((s) => s.id === next.stage);
     const overall = next.landed ? 1 : (index + Math.min(1, next.fraction)) / STAGES.length;
     progress.style.transform = `scaleX(${overall})`;
+    screen.dataset.phase = next.landed ? 'landing' : next.stage;
     showLabel(stageLabel(next.stage));
     applyFormation();
   };
 
-  root.replaceChildren(
-    el('section', { class: 'screen translating-screen' }, [
+  const screen = el('section', { class: 'screen translating-screen' }, [
       el('div', { class: 'track-title', text: initial.source.title }),
       el('button', {
         class: 'btn btn-quiet cancel',
@@ -145,8 +145,8 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
         onclick: () => ctx.dispatch({ type: 'startedOver' }),
       }),
       el('div', { class: 'stage-dock' }, [labelBox, el('div', { class: 'progress-track' }, [progress])]),
-    ]),
-  );
+  ]);
+  root.replaceChildren(screen);
   update(initial);
 
   return {
