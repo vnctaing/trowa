@@ -88,6 +88,16 @@ describe('toMusicXml', () => {
     ]);
   });
 
+  it('writes a syncopated quarter inside a half bar as one untied quarter', () => {
+    const ms = measures(toMusicXml(score([note(60, 0, 2), note(62, 2, 4), note(64, 6, 2), note(65, 8, 8)])));
+    expect(ms[0]!.map((x) => [x.pitch, x.type, x.ties])).toEqual([
+      ['C4', 'eighth', []],
+      ['D4', 'quarter', []],
+      ['E4', 'eighth', []],
+      ['F4', 'half', []],
+    ]);
+  });
+
   it('writes dotted values', () => {
     const ms = measures(toMusicXml(score([note(72, 0, 12), note(null, 12, 4)])));
     expect(ms[0]![0]).toMatchObject({ pitch: 'C5', duration: 12, type: 'half', dots: 1, ties: [] });

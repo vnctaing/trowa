@@ -43,13 +43,25 @@ function escapeXml(s: string): string {
   return s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]!);
 }
 
-function decompose(posInBar: number, length: number, beatTicks: number) {
+type Meter = { barTicks: number; beatTicks: number };
+
+function onBeatGrid(ticks: number, pos: number, { beatTicks }: Meter): boolean {
+  return pos % Math.min(ticks, beatTicks) === 0;
+}
+
+function isSyncopation(ticks: number, pos: number, { barTicks, beatTicks }: Meter): boolean {
+  const halfBar = barTicks / 2;
+  const straddlesHalfBar = barTicks === 4 * beatTicks && pos < halfBar && pos + ticks > halfBar;
+  return beatTicks === TICKS_PER_QUARTER && pos % 2 === 0 && (ticks === 4 || ticks === 6) && !straddlesHalfBar;
+}
+
+function decompose(posInBar: number, length: number, meter: Meter, sounding: boolean) {
+  const fits = (ticks: number, pos: number) => onBeatGrid(ticks, pos, meter) || (sounding && isSyncopation(ticks, pos, meter));
   const pieces: (typeof NOTE_VALUES)[number][] = [];
   let pos = posInBar;
   let left = length;
   while (left > 0) {
-    const value =
-      NOTE_VALUES.find((v) => v.ticks <= left && pos % Math.min(v.ticks, beatTicks) === 0) ?? NOTE_VALUES.at(-1)!;
+    const value = NOTE_VALUES.find((v) => v.ticks <= left && fits(v.ticks, pos)) ?? NOTE_VALUES.at(-1)!;
     pieces.push(value);
     pos += value.ticks;
     left -= value.ticks;
@@ -62,7 +74,8 @@ type Piece =
   | { kind: 'rest'; ticks: number }
   | { kind: 'grace'; midi: Midi };
 
-function layoutMeasures(notes: readonly QuantizedNote[], barTicks: number, beatTicks: number): Piece[][] {
+function layoutMeasures(notes: readonly QuantizedNote[], meter: Meter): Piece[][] {
+  const { barTicks } = meter;
   const timed = notes.filter((x) => x.ornament !== 'grace');
   const endTick = timed.reduce((end, x) => Math.max(end, x.startTick + x.durTicks), 0);
   const barCount = Math.max(1, Math.ceil(endTick / barTicks));
@@ -74,7 +87,7 @@ function layoutMeasures(notes: readonly QuantizedNote[], barTicks: number, beatT
     while (pos < startTick + durTicks) {
       const bar = Math.floor(pos / barTicks);
       const segment = Math.min(startTick + durTicks, (bar + 1) * barTicks) - pos;
-      for (const v of decompose(pos - bar * barTicks, segment, beatTicks)) pieces.push({ bar, ticks: v.ticks });
+      for (const v of decompose(pos - bar * barTicks, segment, meter, midi !== null)) pieces.push({ bar, ticks: v.ticks });
       pos += segment;
     }
     pieces.forEach(({ bar, ticks }, i) => {
@@ -131,7 +144,7 @@ function noteXml(piece: Piece, keyFifths: number, state: AccidentalState, barTic
 export function toMusicXml(score: Score): string {
   const barTicks = score.beatsPerBar * (score.beatUnit === 4 ? TICKS_PER_QUARTER : TICKS_PER_QUARTER / 2);
   const beatTicks = score.beatUnit === 8 ? (TICKS_PER_QUARTER * 3) / 2 : TICKS_PER_QUARTER;
-  const bars = layoutMeasures(score.notes, barTicks, beatTicks);
+  const bars = layoutMeasures(score.notes, { barTicks, beatTicks });
   const keyAlters = keySignatureAlters(score.keyFifths);
   const bpm = Math.round(score.bpm);
   const title = escapeXml(score.title);
