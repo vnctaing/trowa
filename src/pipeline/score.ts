@@ -6,6 +6,7 @@ import { estimateTempo, guessMeter, quantize, sixteenthSec } from './quantize';
 
 const MIN_MELODY_NOTES = 8;
 const MIN_CONFIDENCE = 0.2;
+const MIN_VOICED_FRACTION = 0.03;
 const FULLY_VOICED_FRACTION = 0.5;
 const PLAUSIBLE_NOTES_PER_SEC = [0.3, 8] as const;
 
@@ -24,7 +25,8 @@ export function buildScore(
   const line = reduceToLine(detection.notes, options.transpose);
   const first = line[0];
   const last = line.at(-1);
-  if (first === undefined || last === undefined || line.length < MIN_MELODY_NOTES) throw new TrowaError('no_melody');
+  const tooSparse = line.length < MIN_MELODY_NOTES || detection.voicedFraction < MIN_VOICED_FRACTION;
+  if (first === undefined || last === undefined || tooSparse) throw new TrowaError('no_melody');
 
   const spanSec = last.onsetSec + last.durSec - first.onsetSec;
   const soundingSec = line.reduce((s, x) => s + x.durSec, 0);
