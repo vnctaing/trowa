@@ -36,7 +36,7 @@ export function buildScore(
   if (confidence < MIN_CONFIDENCE) throw new TrowaError('no_melody');
 
   const bpm = options.tempoOverride ?? estimateTempo(line.map((x) => x.onsetSec));
-  const notes = quantize(applyDifficulty(line, options.difficulty, sixteenthSec(bpm)), bpm);
+  const notes = quantize(applyDifficulty(line, options.difficulty, sixteenthSec(bpm)), bpm, options.difficulty === 'melody' ? 2 : 1);
   return {
     ...meta,
     bpm,

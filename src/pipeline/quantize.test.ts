@@ -75,6 +75,15 @@ describe('quantize', () => {
     ]);
   });
 
+  it('on an eighth-note grid, writes 16th-offset onsets and lengths as eighths', () => {
+    const notes = [m(60, 0, 0.42), m(62, 0.42, 0.75), m(64, 1.17, 1.2)];
+    expect(timeline(quantize(notes, 100, 2))).toEqual([
+      [60, 0, 2],
+      [62, 2, 6],
+      [64, 8, 8],
+    ]);
+  });
+
   it('produces a gapless, non-overlapping timeline', () => {
     const out = quantize(beatsToNotes(TWINKLE_BEATS, 100), 100);
     const timed = out.filter((x) => x.ornament !== 'grace');

@@ -62,7 +62,7 @@ export function estimateTempo(onsetsSec: readonly number[]): number {
   return Math.round(bpm * 100) / 100;
 }
 
-export function quantize(notes: readonly MelodyNote[], bpm: number): QuantizedNote[] {
+export function quantize(notes: readonly MelodyNote[], bpm: number, gridTicks = 1): QuantizedNote[] {
   const principal = notes.filter((x) => x.ornament !== 'grace');
   const first = principal[0];
   if (first === undefined) return [];
@@ -77,11 +77,11 @@ export function quantize(notes: readonly MelodyNote[], bpm: number): QuantizedNo
       pendingGraces.push(note);
       continue;
     }
-    const exact = (note.onsetSec - origin) / step;
+    const snap = (sec: number) => gridTicks * Math.round((sec - origin) / step / gridTicks);
     const prev = placed[placed.length - 1];
-    const start = Math.max(Math.round(exact), prev ? prev.start + 1 : 0);
+    const start = Math.max(snap(note.onsetSec), prev ? prev.start + gridTicks : 0);
     origin += PHASE_LOCK_GAIN * (note.onsetSec - (origin + start * step));
-    const end = Math.max(start + 1, Math.round((note.onsetSec + note.durSec - origin) / step));
+    const end = Math.max(start + gridTicks, snap(note.onsetSec + note.durSec));
     placed.push({ midi: note.midi, start, end, graces: pendingGraces });
     pendingGraces = [];
   }
