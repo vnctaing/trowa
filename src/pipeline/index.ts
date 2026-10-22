@@ -16,9 +16,9 @@ const SEPARATE_URL = '/api/separate';
 let model: Promise<GraphModel> | null = null;
 function basicPitchModel(): Promise<GraphModel> {
   if (model === null) {
-    model = import('@tensorflow/tfjs').then((tf) => tf.loadGraphModel(MODEL_URL)).catch(() => {
+    model = import('@tensorflow/tfjs').then((tf) => tf.loadGraphModel(MODEL_URL)).catch((err: unknown) => {
       model = null;
-      throw new TrowaError('network');
+      throw new TrowaError('network', `model load: ${String(err)}`);
     });
   }
   return model;

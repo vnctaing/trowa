@@ -173,6 +173,7 @@ function insideDir(dir, requestPath) {
 
 async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
+  console.log(`[api] ${route} ${req.socket.remoteAddress} ${req.headers['user-agent']?.slice(0, 60) ?? ''}`);
   if (route === 'GET /api/youtube/info') return sendJson(res, 200, await youtubeInfo(videoIdFrom(url.searchParams)));
   if (route === 'GET /api/youtube/audio') return sendFile(res, await youtubeAudio(videoIdFrom(url.searchParams)), 'audio/wav');
   if (route === 'POST /api/client-error') {

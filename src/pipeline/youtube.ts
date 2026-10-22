@@ -22,14 +22,14 @@ async function request(path: string, signal: AbortSignal | undefined): Promise<R
   let response: Response;
   try {
     response = await fetch(path, { signal });
-  } catch {
+  } catch (err) {
     throwIfAborted(signal);
-    throw new TrowaError('network');
+    throw new TrowaError('network', `fetch ${path}: ${String(err)}`);
   }
   if (response.ok) return response;
   const body: unknown = await response.json().catch(() => null);
   const kind = typeof body === 'object' && body !== null && 'error' in body ? body.error : null;
-  throw new TrowaError(isErrorKind(kind) ? kind : 'network');
+  throw new TrowaError(isErrorKind(kind) ? kind : 'network', `HTTP ${response.status} ${path}`);
 }
 
 function parseInfo(body: unknown): YoutubeInfo {
@@ -73,9 +73,9 @@ export async function downloadYoutubeAudio(
       received += chunk.value.length;
       onProgress(Math.min(1, received / total));
     }
-  } catch {
+  } catch (err) {
     throwIfAborted(signal);
-    throw new TrowaError('network');
+    throw new TrowaError('network', `audio stream at ${received}/${total}: ${String(err)}`);
   }
   return bytes.buffer;
 }

@@ -35,7 +35,7 @@ export type Failure = { kind: 'aborted' } | { kind: 'failed'; error: ErrorKind }
 
 export function classify(err: unknown): Failure {
   if (err instanceof DOMException && err.name === 'AbortError') return { kind: 'aborted' };
-  if (err instanceof TrowaError) return { kind: 'failed', error: err.kind };
+  if (err instanceof TrowaError && err.kind !== 'network') return { kind: 'failed', error: err.kind };
   reportUnexpected(err);
   return { kind: 'failed', error: 'network' };
 }
