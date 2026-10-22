@@ -36,5 +36,12 @@ export type Failure = { kind: 'aborted' } | { kind: 'failed'; error: ErrorKind }
 export function classify(err: unknown): Failure {
   if (err instanceof DOMException && err.name === 'AbortError') return { kind: 'aborted' };
   if (err instanceof TrowaError) return { kind: 'failed', error: err.kind };
+  reportUnexpected(err);
   return { kind: 'failed', error: 'network' };
+}
+
+function reportUnexpected(err: unknown): void {
+  const detail = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ''}` : String(err);
+  console.error('[trowa] unexpected failure', err);
+  navigator.sendBeacon('/api/client-error', `${navigator.userAgent}\n${detail}`);
 }

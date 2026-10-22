@@ -175,6 +175,10 @@ async function handleApi(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
   if (route === 'GET /api/youtube/info') return sendJson(res, 200, await youtubeInfo(videoIdFrom(url.searchParams)));
   if (route === 'GET /api/youtube/audio') return sendFile(res, await youtubeAudio(videoIdFrom(url.searchParams)), 'audio/wav');
+  if (route === 'POST /api/client-error') {
+    console.error(`[client-error] ${(await readBody(req)).toString('utf8').slice(0, 4000)}`);
+    return res.writeHead(204).end();
+  }
   if (route === 'POST /api/separate') return sendFile(res, await separateVocals(await readBody(req)), 'audio/wav');
   throw new HttpError(404, 'not_found');
 }
