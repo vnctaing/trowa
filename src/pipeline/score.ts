@@ -2,13 +2,17 @@ import { TrowaError, type Options, type Score } from '../domain';
 import { estimateKeyFifths, majorTonicToFifths } from './key';
 import { applyDifficulty, foldIntoFlute, reduceToLine } from './melody';
 import type { Detection } from './pitch';
-import { estimateTempo, guessMeter, quantize, sixteenthSec } from './quantize';
+import { estimateTempo, guessMeter, quantize, sixteenthSec, type Notation } from './quantize';
 
 const MIN_MELODY_NOTES = 8;
 const MIN_CONFIDENCE = 0.2;
 const MIN_VOICED_FRACTION = 0.03;
 const FULLY_VOICED_FRACTION = 0.5;
 const PLAUSIBLE_NOTES_PER_SEC = [0.3, 8] as const;
+const NOTATION: Record<Options['difficulty'], Notation> = {
+  melody: { gridTicks: 2, holdOffbeatRepeats: true },
+  ornaments: { gridTicks: 1, holdOffbeatRepeats: false },
+};
 
 function densityPlausibility(notesPerSec: number): number {
   const [low, high] = PLAUSIBLE_NOTES_PER_SEC;
@@ -36,7 +40,7 @@ export function buildScore(
   if (confidence < MIN_CONFIDENCE) throw new TrowaError('no_melody');
 
   const bpm = options.tempoOverride ?? estimateTempo(line.map((x) => x.onsetSec));
-  const notes = quantize(applyDifficulty(line, options.difficulty, sixteenthSec(bpm)), bpm, options.difficulty === 'melody' ? 2 : 1);
+  const notes = quantize(applyDifficulty(line, options.difficulty, sixteenthSec(bpm)), bpm, NOTATION[options.difficulty]);
   return {
     ...meta,
     bpm,

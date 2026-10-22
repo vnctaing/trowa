@@ -2,6 +2,9 @@ import { TICKS_PER_QUARTER, type QuantizedNote, type Score } from '../domain';
 import type { MelodyNote } from './melody';
 
 export type Meter = Pick<Score, 'beatsPerBar' | 'beatUnit'>;
+export type Notation = { gridTicks: 1 | 2; holdOffbeatRepeats: boolean };
+
+const DETAILED: Notation = { gridTicks: 1, holdOffbeatRepeats: false };
 
 const ENVELOPE_STEP_SEC = 0.005;
 const ONSET_SPREAD_SEC = 0.02;
@@ -10,6 +13,7 @@ const MAX_BPM = 200;
 const PREFERRED_BPM = 110;
 const PHASE_LOCK_GAIN = 0.1;
 const TRIPLE_METER_MARGIN = 1.25;
+const CONTIGUOUS_SEC = 0.05;
 
 export function sixteenthSec(bpm: number): number {
   return 60 / bpm / TICKS_PER_QUARTER;
@@ -62,14 +66,14 @@ export function estimateTempo(onsetsSec: readonly number[]): number {
   return Math.round(bpm * 100) / 100;
 }
 
-export function quantize(notes: readonly MelodyNote[], bpm: number, gridTicks = 1): QuantizedNote[] {
+export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks, holdOffbeatRepeats }: Notation = DETAILED): QuantizedNote[] {
   const principal = notes.filter((x) => x.ornament !== 'grace');
   const first = principal[0];
   if (first === undefined) return [];
   const step = sixteenthSec(bpm);
   let origin = first.onsetSec;
 
-  type Placed = { midi: MelodyNote['midi']; start: number; end: number; graces: MelodyNote[] };
+  type Placed = { midi: MelodyNote['midi']; start: number; end: number; endSec: number; graces: MelodyNote[] };
   const placed: Placed[] = [];
   let pendingGraces: MelodyNote[] = [];
   for (const note of notes) {
@@ -82,7 +86,20 @@ export function quantize(notes: readonly MelodyNote[], bpm: number, gridTicks = 
     const start = Math.max(snap(note.onsetSec), prev ? prev.start + gridTicks : 0);
     origin += PHASE_LOCK_GAIN * (note.onsetSec - (origin + start * step));
     const end = Math.max(start + gridTicks, snap(note.onsetSec + note.durSec));
-    placed.push({ midi: note.midi, start, end, graces: pendingGraces });
+    const holdsPrevious =
+      holdOffbeatRepeats &&
+      prev?.midi === note.midi &&
+      start <= prev.end &&
+      note.onsetSec - prev.endSec < CONTIGUOUS_SEC &&
+      start % TICKS_PER_QUARTER !== 0;
+    if (prev && holdsPrevious) {
+      prev.end = Math.max(prev.end, end);
+      prev.endSec = note.onsetSec + note.durSec;
+      prev.graces.push(...pendingGraces);
+      pendingGraces = [];
+      continue;
+    }
+    placed.push({ midi: note.midi, start, end, endSec: note.onsetSec + note.durSec, graces: pendingGraces });
     pendingGraces = [];
   }
 
