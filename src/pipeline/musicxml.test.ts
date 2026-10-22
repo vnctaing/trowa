@@ -98,6 +98,14 @@ describe('toMusicXml', () => {
     ]);
   });
 
+  it('ties a quarter that straddles the middle of a 4/4 bar', () => {
+    const ms = measures(toMusicXml(score([note(60, 0, 6), note(62, 6, 4), note(64, 10, 6)])));
+    expect(ms[0]!.filter((x) => x.pitch === 'D4').map((x) => [x.type, x.ties])).toEqual([
+      ['eighth', ['start']],
+      ['eighth', ['stop']],
+    ]);
+  });
+
   it('writes dotted values', () => {
     const ms = measures(toMusicXml(score([note(72, 0, 12), note(null, 12, 4)])));
     expect(ms[0]![0]).toMatchObject({ pitch: 'C5', duration: 12, type: 'half', dots: 1, ties: [] });

@@ -46,7 +46,10 @@ function escapeXml(s: string): string {
 type Meter = { barTicks: number; beatTicks: number };
 
 function onBeatGrid(ticks: number, pos: number, { beatTicks }: Meter): boolean {
-  return pos % Math.min(ticks, beatTicks) === 0;
+  if (ticks >= beatTicks) return pos % beatTicks === 0;
+  const undotted = 2 ** Math.floor(Math.log2(ticks));
+  const staysInBeat = Math.floor(pos / beatTicks) === Math.floor((pos + ticks - 1) / beatTicks);
+  return staysInBeat && pos % undotted === 0;
 }
 
 function isSyncopation(ticks: number, pos: number, { barTicks, beatTicks }: Meter): boolean {
