@@ -5,7 +5,10 @@
 <script type="module">
 import { runPipeline, toMusicXml, lookupYoutube, transposeScore } from '/src/pipeline/index.ts';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { getBackend } from '@tensorflow/tfjs';
+import { getBackend, loadGraphModel } from '@tensorflow/tfjs';
+import { decodeAudio, toMonoPcm, PITCH_SAMPLE_RATE } from '/src/pipeline/decode.ts';
+import { separateLead, leadEmphasis } from '/src/pipeline/separate.ts';
+import { detectNotes } from '/src/pipeline/pitch.ts';
 const out = document.getElementById('log');
 const log = (s) => { out.textContent += s + '\n'; console.log(s); };
 const params = new URLSearchParams(location.search);
@@ -50,8 +53,21 @@ async function abortMidway() {
   try { await run; log('abort: pipeline resolved (unexpected)'); }
   catch (e) { log(`abort: rejected with ${e.name} after stages ${stages.join(' > ')}`); }
 }
+async function capture() {
+  const yt = params.get('yt');
+  const path = yt ? `/api/youtube/audio?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${yt}`)}` : params.get('wav');
+  const bytes = await (await fetch(path)).arrayBuffer();
+  const mix = await toMonoPcm(await decodeAudio(bytes), PITCH_SAMPLE_RATE);
+  const wanted = params.get('sep') ?? 'demucs';
+  const lead = wanted === 'filter' ? { samples: leadEmphasis(mix), method: 'filter' } : await separateLead(mix, { endpoint: '/api/separate' });
+  if (lead.method !== wanted) throw new Error(`asked for ${wanted} separation, got ${lead.method}`);
+  const detection = await detectNotes(loadGraphModel('/models/basic-pitch/model.json'), lead.samples, () => {});
+  window.__capture = { source: yt ?? path, separation: lead.method, durationSec: mix.samples.length / mix.sampleRate, ...detection };
+  log(`captured ${detection.notes.length} notes via ${lead.method}`);
+}
 try {
-  if (params.get('mode') === 'abort') await abortMidway();
+  if (params.get('mode') === 'capture') await capture();
+  else if (params.get('mode') === 'abort') await abortMidway();
   else if (params.get('mode') === 'lookup') await lookups();
   else await transcribe(params.get('wav') ?? '/.proof/fixtures/twinkle.wav');
 } finally { window.__done = true; }
