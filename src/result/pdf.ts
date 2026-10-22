@@ -25,12 +25,22 @@ export async function scorePdf(musicXml: string): Promise<Blob> {
     if (pages.length === 0) throw new Error('OSMD rendered no pages');
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     for (const [i, svg] of pages.entries()) {
+      normalizeText(svg);
       if (i > 0) pdf.addPage('a4', 'portrait');
       await pdf.svg(svg, { x: 0, y: 0, width: A4_MM.w, height: A4_MM.h });
     }
     return pdf.output('blob');
   } finally {
     host.remove();
+  }
+}
+
+// svg2pdf drops OSMD's tempo text, the only one set as font-size "14pt" in font-family "times".
+function normalizeText(svg: SVGSVGElement): void {
+  for (const text of svg.querySelectorAll('text')) {
+    const size = text.getAttribute('font-size');
+    if (size?.endsWith('pt')) text.setAttribute('font-size', `${(parseFloat(size) * 4) / 3}px`);
+    if (text.getAttribute('font-family') === 'times') text.setAttribute('font-family', 'Times New Roman');
   }
 }
 
