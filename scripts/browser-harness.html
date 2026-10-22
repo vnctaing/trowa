@@ -28,8 +28,9 @@ async function transcribe(path) {
       if (e.type === 'progress') progress++;
     });
     log(`progress events: ${progress}, tf backend: ${getBackend()}`);
-    log(`score: bpm ${score.bpm}, ${score.beatsPerBar}/${score.beatUnit}, keyFifths ${score.keyFifths}, confidence ${score.confidence}, ${score.notes.filter(n => n.midi !== null).length} notes`);
-    const xml = toMusicXml(params.get('transpose') ? transposeScore(score, Number(params.get('transpose'))) : score);
+    const shown = params.get('transpose') ? transposeScore(score, Number(params.get('transpose'))) : score;
+    log(`score: bpm ${shown.bpm}, ${shown.beatsPerBar}/${shown.beatUnit}, keyFifths ${shown.keyFifths}, confidence ${shown.confidence}, ${shown.notes.filter(n => n.midi !== null).length} notes`);
+    const xml = toMusicXml(shown);
     const osmd = new OpenSheetMusicDisplay('score', { autoResize: false, drawTitle: true });
     await osmd.load(xml);
     osmd.render();
