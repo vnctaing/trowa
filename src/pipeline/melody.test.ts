@@ -39,7 +39,7 @@ describe('reduceToLine', () => {
 
   it('never outputs overlapping notes', () => {
     const line = reduceToLine(
-      [n(60, 0, 1), n(64, 0.5, 1, 0.9), n(67, 1.2, 0.5), n(62, 1.3, 0.2, 0.2)],
+      [n(60, 0, 1), n(64, 0.5, 1, 0.9), n(67, 1.4, 0.5), n(62, 1.3, 0.2, 0.2)],
       0,
     );
     for (let i = 1; i < line.length; i++) {
@@ -57,6 +57,33 @@ describe('reduceToLine', () => {
   it('applies transpose before folding into the flute range', () => {
     const line = reduceToLine([n(60, 0, 0.5), n(95, 0.6, 0.5)], 2);
     expect(pitches(line)).toEqual([62, 85]);
+  });
+
+  it('merges overlapping duplicate detections of one pitch into one note', () => {
+    const line = reduceToLine([n(60, 0, 0.5, 0.5), n(60, 0.3, 0.25, 0.9), n(62, 0.6, 0.5)], 0);
+    expect(line.map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
+      [60, 0, 0.55],
+      [62, 0.6, 0.5],
+    ]);
+  });
+
+  it('absorbs a weaker contiguous tail of the same pitch', () => {
+    const line = reduceToLine([n(60, 1.0, 0.48, 0.77), n(60, 1.48, 0.12, 0.5), n(62, 1.6, 0.48, 0.77)], 0);
+    expect(line.map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
+      [60, 1, 0.6],
+      [62, 1.6, 0.48],
+    ]);
+  });
+
+  it('does not let a sustained accompaniment note surface in short melody gaps', () => {
+    const melody = [n(60, 1.0, 0.5), n(62, 1.6, 0.5), n(64, 2.2, 0.5)];
+    const bass = n(48, 1.02, 1.6, 0.6);
+    expect(pitches(reduceToLine([...melody, bass], 0))).toEqual([60, 62, 64]);
+  });
+
+  it('keeps a lower note that sustains on alone after the melody stops', () => {
+    const line = reduceToLine([n(72, 0, 0.5), n(67, 0, 1.5, 0.5)], 0);
+    expect(pitches(line)).toEqual([72, 67]);
   });
 
   it('keeps repeated notes that are separately articulated', () => {
