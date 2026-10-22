@@ -1,8 +1,7 @@
-import { loadGraphModel, type GraphModel } from '@tensorflow/tfjs';
+import type { GraphModel } from '@tensorflow/tfjs';
 import { TrowaError, type Options, type PipelineEvent, type Score, type Source } from '../domain';
 import { throwIfAborted } from './abort';
-import { decodeAudio, toMonoPcm } from './decode';
-import { detectNotes, PITCH_SAMPLE_RATE } from './pitch';
+import { decodeAudio, PITCH_SAMPLE_RATE, toMonoPcm } from './decode';
 import { buildScore } from './score';
 import { separateLead } from './separate';
 import { downloadYoutubeAudio } from './youtube';
@@ -17,7 +16,7 @@ const SEPARATE_URL = '/api/separate';
 let model: Promise<GraphModel> | null = null;
 function basicPitchModel(): Promise<GraphModel> {
   if (model === null) {
-    model = loadGraphModel(MODEL_URL).catch(() => {
+    model = import('@tensorflow/tfjs').then((tf) => tf.loadGraphModel(MODEL_URL)).catch(() => {
       model = null;
       throw new TrowaError('network');
     });
@@ -61,6 +60,7 @@ export async function runPipeline(
   throwIfAborted(signal);
 
   onEvent({ type: 'stage', stage: 'detecting' });
+  const { detectNotes } = await import('./pitch');
   const detection = await detectNotes(
     modelReady,
     lead.samples,

@@ -1,6 +1,8 @@
 import { MAX_TRACK_SECONDS, TrowaError } from '../domain';
 import type { MonoPcm } from './wav';
 
+export const PITCH_SAMPLE_RATE = 22050;
+
 export async function decodeAudio(bytes: ArrayBuffer): Promise<AudioBuffer> {
   let buffer: AudioBuffer;
   try {

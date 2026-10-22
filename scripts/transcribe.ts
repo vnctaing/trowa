@@ -4,12 +4,16 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as tf from '@tensorflow/tfjs';
+import { Agent, setGlobalDispatcher } from 'undici';
 import { TrowaError, type Options, type QuantizedNote } from '../src/domain';
 import { toMusicXml } from '../src/pipeline/musicxml';
-import { detectNotes, PITCH_SAMPLE_RATE } from '../src/pipeline/pitch';
+import { PITCH_SAMPLE_RATE } from '../src/pipeline/decode';
+import { detectNotes } from '../src/pipeline/pitch';
 import { buildScore } from '../src/pipeline/score';
 import { separateLead } from '../src/pipeline/separate';
 import { decodeWav } from '../src/pipeline/wav';
+
+setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 }));
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,

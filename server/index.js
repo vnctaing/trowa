@@ -186,9 +186,7 @@ async function serveStatic(req, res, url) {
   return sendFile(res, target, MIME[extname(target)] ?? 'application/octet-stream');
 }
 
-const vite = DEV
-  ? await (await import('vite')).createServer({ root: ROOT, server: { middlewareMode: true }, appType: 'spa' })
-  : null;
+let vite = null;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -207,5 +205,10 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) sendJson(res, 500, { error: 'network' });
   }
 });
+
+if (DEV) {
+  const { createServer } = await import('vite');
+  vite = await createServer({ root: ROOT, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
+}
 
 server.listen(PORT, () => console.log(`trowa ${DEV ? 'dev' : 'prod'} server on http://localhost:${PORT}`));

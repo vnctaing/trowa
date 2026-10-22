@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pipeline harness</title>
+<style>body{background:#fff;font:13px monospace;margin:16px} #score{width:1000px}</style></head>
+<body><pre id="log"></pre><div id="score"></div>
+<script type="module">
+import { runPipeline, toMusicXml, lookupYoutube, transposeScore } from '/src/pipeline/index.ts';
+import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import { getBackend } from '@tensorflow/tfjs';
+const out = document.getElementById('log');
+const log = (s) => { out.textContent += s + '\n'; console.log(s); };
+const params = new URLSearchParams(location.search);
+async function lookups() {
+  for (const url of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=yZIXLfi8CZQ', 'https://vimeo.com/1']) {
+    try { const info = await lookupYoutube(url); log(`lookup ${url} -> ${info.title} (${info.durationSec}s)`); }
+    catch (e) { log(`lookup ${url} -> TrowaError(${e.kind})`); }
+  }
+}
+async function transcribe(path) {
+  const blob = await (await fetch(path)).blob();
+  const file = new File([blob], path.split('/').pop(), { type: 'audio/wav' });
+  let progress = 0;
+  const t0 = performance.now();
+  try {
+    const score = await runPipeline({ kind: 'file', file, title: file.name }, { transpose: 0, key: 'auto', difficulty: 'melody', tempoOverride: null }, (e) => {
+      if (e.type === 'stage') log(`[${((performance.now() - t0) / 1000).toFixed(1)}s] stage ${e.stage}`);
+      if (e.type === 'audio') log(`audio event: ${e.buffer.duration.toFixed(2)}s ${e.buffer.sampleRate}Hz ${e.buffer.numberOfChannels}ch`);
+      if (e.type === 'notes') log(`notes event: ${e.notes.length} raw notes`);
+      if (e.type === 'progress') progress++;
+    });
+    log(`progress events: ${progress}, tf backend: ${getBackend()}`);
+    log(`score: bpm ${score.bpm}, ${score.beatsPerBar}/${score.beatUnit}, keyFifths ${score.keyFifths}, confidence ${score.confidence}, ${score.notes.filter(n => n.midi !== null).length} notes`);
+    const xml = toMusicXml(params.get('transpose') ? transposeScore(score, Number(params.get('transpose'))) : score);
+    const osmd = new OpenSheetMusicDisplay('score', { autoResize: false, drawTitle: true });
+    await osmd.load(xml);
+    osmd.render();
+    log(`OSMD rendered ${osmd.GraphicSheet.MeasureList.length} measures, title "${osmd.Sheet.TitleString}"`);
+  } catch (e) {
+    log(`runPipeline -> ${e.kind ? `TrowaError(${e.kind})` : e.stack}`);
+  }
+}
+async function abortMidway() {
+  const blob = await (await fetch('/.proof/fixtures/twinkle.wav')).blob();
+  const controller = new AbortController();
+  const stages = [];
+  const run = runPipeline({ kind: 'file', file: new File([blob], 't.wav'), title: 't' }, { transpose: 0, key: 'auto', difficulty: 'melody', tempoOverride: null }, (e) => {
+    if (e.type === 'stage') stages.push(e.stage);
+    if (e.type === 'progress' && e.stage === 'detecting' && e.fraction > 0.2) controller.abort();
+  }, controller.signal);
+  try { await run; log('abort: pipeline resolved (unexpected)'); }
+  catch (e) { log(`abort: rejected with ${e.name} after stages ${stages.join(' > ')}`); }
+}
+try {
+  if (params.get('mode') === 'abort') await abortMidway();
+  else if (params.get('mode') === 'lookup') await lookups();
+  else await transcribe(params.get('wav') ?? '/.proof/fixtures/twinkle.wav');
+} finally { window.__done = true; }
+</script></body></html>

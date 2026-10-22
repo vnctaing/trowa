@@ -61,6 +61,8 @@ describe('buildScore', () => {
     expect(attempt(detection([], 0))).toThrow(TrowaError);
     expect(attempt(detection(detected([60, 64, 67]), 0.05))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
     expect(attempt(detection(detected(C_MAJOR_TUNE), 0.0))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
+    const scatteredBlips = C_MAJOR_TUNE.map((m, i) => ({ midi: m as Midi, onsetSec: i * 2, durSec: 0.1, amplitude: 0.4 }));
+    expect(attempt(detection(scatteredBlips, 0.05))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
   });
 
   it('respects tempoOverride, a numeric key and transpose', () => {

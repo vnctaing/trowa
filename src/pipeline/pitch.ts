@@ -3,7 +3,6 @@ import type { GraphModel } from '@tensorflow/tfjs';
 import type { DetectedNote, Midi } from '../domain';
 import { throwIfAborted } from './abort';
 
-export const PITCH_SAMPLE_RATE = 22050;
 const CONFIDENT_FRAME = 0.5;
 
 export type Detection = { notes: DetectedNote[]; voicedFraction: number };
