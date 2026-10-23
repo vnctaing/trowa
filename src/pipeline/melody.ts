@@ -9,6 +9,7 @@ const TAIL_AMPLITUDE_RATIO = 0.85;
 const FRAGMENT_SIXTEENTHS = 2;
 const FRAGMENT_GAP_SEC = 0.05;
 const REARTICULATION_ONSET = 0.8;
+const DROPOUT_SIXTEENTHS = 4;
 const REVEALED_AFTER_SEC = 0.15;
 const REVEALED_MIN_SEC = 0.25;
 const SHORT_NOTE_FRACTION_OF_16TH = 0.75;
@@ -112,12 +113,12 @@ const mergeFragments: Simplification = (line, sixteenthSec) => {
   const out: DetectedNote[] = [];
   for (const note of line) {
     const prev = out.at(-1);
+    const gap = prev === undefined ? Infinity : note.onsetSec - (prev.onsetSec + prev.durSec);
     const isFragment =
-      prev !== undefined &&
-      prev.midi === note.midi &&
-      note.onsetSec - (prev.onsetSec + prev.durSec) < FRAGMENT_GAP_SEC &&
-      (note.durSec < sixteenthSec * FRAGMENT_SIXTEENTHS || note.onset < REARTICULATION_ONSET);
-    if (isFragment) prev.durSec = note.onsetSec + note.durSec - prev.onsetSec;
+      prev?.midi === note.midi &&
+      ((gap < FRAGMENT_GAP_SEC && note.durSec < sixteenthSec * FRAGMENT_SIXTEENTHS) ||
+        (gap < sixteenthSec * DROPOUT_SIXTEENTHS && note.onset < REARTICULATION_ONSET));
+    if (prev && isFragment) prev.durSec = note.onsetSec + note.durSec - prev.onsetSec;
     else out.push({ ...note });
   }
   return out;

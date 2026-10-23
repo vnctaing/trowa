@@ -139,6 +139,19 @@ describe('applyDifficulty', () => {
     ]);
   });
 
+  it("bridges a dropout of under a beat when the same pitch resumes without an attack in 'melody'", () => {
+    const dropout = [n(71, 1.0, 1.5), n(71, 2.75, 1.25, 0.4, 0.3), n(76, 4.0, 0.5)];
+    expect(applyDifficulty(dropout, 'melody', sixteenth).map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
+      [71, 1.0, 3.0],
+      [76, 4.0, 0.5],
+    ]);
+  });
+
+  it("keeps a same-pitch note re-struck after a short silence in 'melody'", () => {
+    const restruck = [n(71, 0, 0.45), n(71, 0.6, 0.45, 0.8, 0.9)];
+    expect(pitches(applyDifficulty(restruck, 'melody', sixteenth))).toEqual([71, 71]);
+  });
+
   it("keeps same-pitch quarter notes as separate notes in 'melody'", () => {
     const repeated = [n(60, 0, 0.6), n(60, 0.6, 0.55), n(62, 1.2, 0.6)];
     expect(pitches(applyDifficulty(repeated, 'melody', sixteenth))).toEqual([60, 60, 62]);
