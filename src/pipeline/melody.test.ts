@@ -99,8 +99,8 @@ describe('reduceToLine', () => {
   });
 
   it('moves a note detected an octave away from the rest of its phrase back into the phrase', () => {
-    const line = reduceToLine([72, 74, 88, 76, 74].map((midi, i) => n(midi, i * 0.5, 0.5)), 0);
-    expect(pitches(line)).toEqual([72, 74, 76, 76, 74]);
+    const line = reduceToLine([72, 74, 88, 76, 74, 86].map((midi, i) => n(midi, i * 0.5, 0.5)), 0);
+    expect(pitches(line)).toEqual([72, 74, 76, 76, 74, 74]);
   });
 
   it('keeps a phrase that climbs stepwise over more than an octave', () => {

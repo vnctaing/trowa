@@ -175,13 +175,14 @@ const { values, positionals } = parseArgs({
     json: { type: 'string' },
     xml: { type: 'string' },
     summary: { type: 'boolean', default: false },
+    bpm: { type: 'string' },
   },
 });
 const options: Options = {
   transpose: 0,
   key: 'auto',
   difficulty: values.difficulty === 'ornaments' ? 'ornaments' : 'melody',
-  tempoOverride: null,
+  tempoOverride: values.bpm ? Number(values.bpm) : null,
 };
 const fixtures = positionals.length
   ? positionals

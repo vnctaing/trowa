@@ -128,7 +128,7 @@ function pullOctaveOutliers(phrase: readonly DetectedNote[]): DetectedNote[] {
   const center = weightedMedianMidi(phrase);
   return phrase.map((x) => {
     const distance = x.midi - center;
-    const midi = Math.abs(distance) > OCTAVE_OUTLIER_SEMITONES ? x.midi - 12 * Math.round(distance / 12) : x.midi;
+    const midi = Math.abs(distance) >= OCTAVE_OUTLIER_SEMITONES ? x.midi - 12 * Math.round(distance / 12) : x.midi;
     return { ...x, midi: foldIntoFlute(midi) };
   });
 }
