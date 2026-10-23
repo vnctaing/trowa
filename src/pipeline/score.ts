@@ -10,8 +10,8 @@ const MIN_VOICED_FRACTION = 0.03;
 const FULLY_VOICED_FRACTION = 0.5;
 const PLAUSIBLE_NOTES_PER_SEC = [0.3, 8] as const;
 const NOTATION: Record<Options['difficulty'], Notation> = {
-  melody: { gridTicks: 2, holdOffbeatRepeats: true, legatoTicks: 4 },
-  ornaments: { gridTicks: 1, holdOffbeatRepeats: false, legatoTicks: 4 },
+  melody: { gridTicks: 2, legatoTicks: 4 },
+  ornaments: { gridTicks: 1, legatoTicks: 4 },
 };
 
 function densityPlausibility(notesPerSec: number): number {
