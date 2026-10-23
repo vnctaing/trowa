@@ -31,7 +31,6 @@ export type UiState =
       score: Score;
       musicXml: string;
       transposedBy: number;
-      playing: boolean;
     }
   | { screen: 'error'; kind: ErrorKind };
 
@@ -53,7 +52,6 @@ export type Action =
   | { type: 'landingFinished' }
   | { type: 'failed'; kind: ErrorKind }
   | { type: 'transposed'; rendered: Rendered; transposedBy: number }
-  | { type: 'playbackChanged'; playing: boolean }
   | { type: 'startedOver' };
 
 export const INITIAL: UiState = {
@@ -126,7 +124,6 @@ export function reduce(state: UiState, action: Action): UiState {
               score: state.landed.score,
               musicXml: state.landed.musicXml,
               transposedBy: 0,
-              playing: false,
             }
           : state;
       }
@@ -148,10 +145,7 @@ export function reduce(state: UiState, action: Action): UiState {
             score: action.rendered.score,
             musicXml: action.rendered.musicXml,
             transposedBy: action.transposedBy,
-            playing: false,
           };
-        case 'playbackChanged':
-          return { ...state, playing: action.playing };
         default:
           return state;
       }

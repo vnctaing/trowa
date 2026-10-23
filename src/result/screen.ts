@@ -1,8 +1,9 @@
+import type { Score } from '../domain';
 import type { Mount } from '../ui/context';
 import { el } from '../ui/dom';
-import { perform, type Performance } from './flute';
 import { download, scorePdf, slug } from './pdf';
 import { pinchZoom } from './pinch';
+import { createPlayer } from './player';
 import { ScoreSheet } from './sheet';
 
 const LOW_CONFIDENCE = 0.5;
@@ -15,45 +16,13 @@ function transposeText(semitones: number): string {
 export const mountResult: Mount<'result'> = (root, initial, ctx) => {
   let state = initial;
   let renderedXml = '';
-  let performance: Performance | null = null;
-  let frame = 0;
+  let renderedScore: Score | null = null;
+  let wav: Blob | null = null;
 
   const zoomContent = el('div', { class: 'score-zoom' });
   const viewport = el('div', { class: 'score-viewport is-rendering', 'aria-label': 'Score' }, [zoomContent]);
   const sheet = new ScoreSheet(zoomContent);
   const releasePinch = pinchZoom(viewport, zoomContent);
-
-  const stopPlayback = () => {
-    cancelAnimationFrame(frame);
-    performance?.stop();
-    performance = null;
-    sheet.clearHighlight();
-  };
-
-  const follow = () => {
-    if (!performance) return;
-    const audio = ctx.audio();
-    if (audio.currentTime >= performance.endsAt) {
-      stopPlayback();
-      ctx.dispatch({ type: 'playbackChanged', playing: false });
-      return;
-    }
-    sheet.highlightAt(performance.tickAt(audio.currentTime));
-    frame = requestAnimationFrame(follow);
-  };
-
-  const togglePlay = () => {
-    if (performance) {
-      stopPlayback();
-      ctx.dispatch({ type: 'playbackChanged', playing: false });
-      return;
-    }
-    const audio = ctx.audio();
-    void audio.resume();
-    performance = perform(audio, state.score);
-    ctx.dispatch({ type: 'playbackChanged', playing: true });
-    frame = requestAnimationFrame(follow);
-  };
 
   const transpose = (delta: number) => {
     const score = ctx.pipeline.transposeScore(state.score, delta);
@@ -88,7 +57,26 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
       ),
   });
 
-  const playButton = el('button', { class: 'btn', type: 'button', onclick: togglePlay });
+  const audioButton = el('button', {
+    class: 'btn',
+    type: 'button',
+    text: 'Audio',
+    title: 'Download audio (WAV)',
+    disabled: true,
+    onclick: () => wav && download(wav, `${slug(state.score.title)}.wav`),
+  });
+
+  const player = createPlayer({
+    onTick: (tick) => (tick === null ? sheet.clearHighlight() : sheet.highlightAt(tick)),
+    onTrack: (track) => {
+      wav = track;
+      audioButton.disabled = track === null;
+    },
+  });
+  viewport.addEventListener('click', (e) => {
+    const tick = sheet.tickAt(e.target);
+    if (tick !== null) player.seekToTick(tick);
+  });
   const transposeOut = el('output', { 'aria-live': 'polite' });
   const title = el('h1', { class: 'paper-title' });
   const sourceLine = el('div', { class: 'paper-source' });
@@ -106,13 +94,13 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
         onclick: () => ctx.dispatch({ type: 'startedOver' }),
       }),
       el('div', { class: 'result-actions' }, [
-        playButton,
         el('div', { class: 'transpose', role: 'group', 'aria-label': 'Transpose' }, [
           el('button', { type: 'button', 'aria-label': 'Transpose down', onclick: () => transpose(-1), text: '−' }),
           transposeOut,
           el('button', { type: 'button', 'aria-label': 'Transpose up', onclick: () => transpose(1), text: '+' }),
         ]),
         xmlButton,
+        audioButton,
         pdfButton,
       ]),
     ]),
@@ -123,6 +111,7 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
       viewport,
       el('div', { class: 'zoom-hint', text: 'Pinch to zoom the score' }),
     ]),
+    player.element,
   ]);
 
   const update = (next: typeof state) => {
@@ -130,15 +119,19 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
     title.textContent = next.score.title;
     sourceLine.textContent = next.score.source;
     warning.hidden = next.score.confidence >= LOW_CONFIDENCE;
-    playButton.textContent = next.playing ? '■ Stop' : '▶ Play';
-    playButton.setAttribute('aria-pressed', String(next.playing));
     transposeOut.textContent = transposeText(next.transposedBy);
+    if (next.score !== renderedScore) {
+      renderedScore = next.score;
+      player.load(next.score);
+    }
     if (next.musicXml !== renderedXml) {
       renderedXml = next.musicXml;
-      stopPlayback();
+      sheet.clearHighlight();
       const xml = next.musicXml;
       void sheet.render(xml).then(() => {
-        if (xml === renderedXml) viewport.classList.remove('is-rendering');
+        if (xml !== renderedXml) return;
+        viewport.classList.remove('is-rendering');
+        player.repaint();
         void ctx.field.release(1000);
       });
     }
@@ -150,7 +143,7 @@ export const mountResult: Mount<'result'> = (root, initial, ctx) => {
   return {
     update,
     unmount() {
-      stopPlayback();
+      player.destroy();
       releasePinch();
     },
   };

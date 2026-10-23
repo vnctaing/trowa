@@ -1,12 +1,13 @@
 import type { Score } from '../domain';
 import { midiToHz, secondsPerTick } from '../ui/music';
 
-const LEAD_IN_SEC = 0.15;
 const PEAK = 0.26;
+const SAMPLE_RATE = 32000;
+const TAIL_SEC = 0.6;
 
 let noise: AudioBuffer | null = null;
 
-function breathNoise(ctx: AudioContext): AudioBuffer {
+function breathNoise(ctx: BaseAudioContext): AudioBuffer {
   if (noise && noise.sampleRate === ctx.sampleRate) return noise;
   const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -15,7 +16,7 @@ function breathNoise(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
-function voice(ctx: AudioContext, out: AudioNode, hz: number, start: number, dur: number): void {
+function voice(ctx: BaseAudioContext, out: AudioNode, hz: number, start: number, dur: number): void {
   const end = start + dur;
   const release = Math.min(0.09, dur * 0.3);
 
@@ -68,36 +69,19 @@ function voice(ctx: AudioContext, out: AudioNode, hz: number, start: number, dur
   breath.stop(end + 0.2);
 }
 
-export type Performance = { tickAt: (time: number) => number; endsAt: number; stop: () => void };
-
-export function perform(ctx: AudioContext, score: Score): Performance {
+export function renderFlute(score: Score): Promise<AudioBuffer> {
   const spt = secondsPerTick(score);
-  const startsAt = ctx.currentTime + LEAD_IN_SEC;
-  const master = ctx.createGain();
-  master.gain.value = 1;
+  const end = Math.max(0, ...score.notes.map((n) => (n.startTick + n.durTicks) * spt));
+  const ctx = new OfflineAudioContext(1, Math.ceil((end + TAIL_SEC) * SAMPLE_RATE), SAMPLE_RATE);
   const tone = ctx.createBiquadFilter();
   tone.type = 'lowpass';
   tone.frequency.value = 5200;
-  tone.connect(master).connect(ctx.destination);
+  tone.connect(ctx.destination);
 
-  let last = 0;
   for (const n of score.notes) {
-    const start = n.startTick * spt;
-    last = Math.max(last, start + n.durTicks * spt);
     if (n.midi === null) continue;
     const dur = n.ornament === 'grace' ? 0.07 : n.durTicks * spt * 0.96;
-    voice(ctx, tone, midiToHz(n.midi), startsAt + start, dur);
+    voice(ctx, tone, midiToHz(n.midi), n.startTick * spt, dur);
   }
-
-  return {
-    tickAt: (time) => (time - startsAt) / spt,
-    endsAt: startsAt + last,
-    stop() {
-      const now = ctx.currentTime;
-      master.gain.cancelScheduledValues(now);
-      master.gain.setValueAtTime(master.gain.value, now);
-      master.gain.linearRampToValueAtTime(0, now + 0.12);
-      setTimeout(() => master.disconnect(), 200);
-    },
-  };
+  return ctx.startRendering();
 }

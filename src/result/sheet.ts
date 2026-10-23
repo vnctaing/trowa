@@ -9,6 +9,7 @@ export class ScoreSheet {
   private stepTicks: number[] = [];
   private step = -1;
   private lit: SVGGElement[] = [];
+  private noteTicks = new Map<Element, number>();
 
   constructor(private readonly container: HTMLElement) {
     this.osmd = new OpenSheetMusicDisplay(container, {
@@ -29,6 +30,7 @@ export class ScoreSheet {
     await this.osmd.load(musicXml);
     this.osmd.zoom = Math.min(1, Math.max(0.55, this.container.clientWidth / 860));
     this.osmd.render();
+    this.noteTicks = new Map();
     this.stepTicks = this.collectSteps();
     this.step = -1;
     this.lit = [];
@@ -40,7 +42,9 @@ export class ScoreSheet {
     const ticks: number[] = [];
     cursor.reset();
     while (!cursor.Iterator.EndReached) {
-      ticks.push(cursor.Iterator.currentTimeStamp.RealValue * TICKS_PER_WHOLE);
+      const tick = cursor.Iterator.currentTimeStamp.RealValue * TICKS_PER_WHOLE;
+      ticks.push(tick);
+      for (const g of this.notesUnderCursor()) this.noteTicks.set(g, tick);
       cursor.next();
     }
     cursor.reset();
@@ -64,10 +68,22 @@ export class ScoreSheet {
       this.step++;
     }
     this.unlight();
-    this.lit = cursor
-      .GNotesUnderCursor()
-      .flatMap((n) => (n instanceof VexFlowGraphicalNote ? [n.getSVGGElement()] : []));
+    this.lit = this.notesUnderCursor();
     for (const g of this.lit) g.classList.add(PLAYING_CLASS);
+  }
+
+  tickAt(target: EventTarget | null): number | null {
+    for (let node = target instanceof Element ? target : null; node && node !== this.container; node = node.parentElement) {
+      const tick = this.noteTicks.get(node);
+      if (tick !== undefined) return tick;
+    }
+    return null;
+  }
+
+  private notesUnderCursor(): SVGGElement[] {
+    return (this.osmd.cursor?.GNotesUnderCursor() ?? []).flatMap((n) =>
+      n instanceof VexFlowGraphicalNote ? [n.getSVGGElement()] : [],
+    );
   }
 
   clearHighlight(): void {
