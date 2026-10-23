@@ -1,6 +1,6 @@
 import { TrowaError, type DetectedNote, type Options, type Score } from '../domain';
 import { estimateKeyFifths, majorTonicToFifths } from './key';
-import { applyDifficulty, foldIntoFlute, reduceToLine } from './melody';
+import { applyDifficulty, foldIntoFlute, foldLine } from './melody';
 import type { Detection } from './pitch';
 import { estimateTempo, guessMeter, quantize, sixteenthSec, type Notation } from './quantize';
 
@@ -29,7 +29,7 @@ export function buildScore(detection: Detection, options: Options, meta: Pick<Sc
 }
 
 export function notate(detection: Detection, options: Options, meta: Pick<Score, 'title' | 'source'>): Notated {
-  const line = reduceToLine(detection.notes, options.transpose);
+  const line = foldLine(detection.line, options.transpose);
   const first = line[0];
   const last = line.at(-1);
   const tooSparse = line.length < MIN_MELODY_NOTES || detection.voicedFraction < MIN_VOICED_FRACTION;

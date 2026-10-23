@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DetectedNote, Midi } from '../domain';
-import { applyDifficulty, foldIntoFlute, reduceToLine } from './melody';
+import { applyDifficulty, foldIntoFlute, foldLine } from './melody';
 
 const n = (midi: number, onsetSec: number, durSec: number, amplitude = 0.8, onset = 0.9): DetectedNote => ({
   midi: midi as Midi,
@@ -27,96 +27,26 @@ describe('foldIntoFlute', () => {
   });
 });
 
-describe('reduceToLine', () => {
-  it('keeps the louder note when two overlap for the whole span', () => {
-    const line = reduceToLine([n(64, 0, 1, 0.3), n(67, 0, 1, 0.9)], 0);
-    expect(pitches(line)).toEqual([67]);
-  });
-
-  it('prefers the higher note when amplitudes tie', () => {
-    const line = reduceToLine([n(60, 0, 1, 0.5), n(72, 0, 1, 0.5)], 0);
-    expect(pitches(line)).toEqual([72]);
-  });
-
-  it('follows a quieter lead an octave above a louder accompaniment', () => {
-    const ostinato = [0, 0.25, 0.5, 0.75].map((t) => n(66, t, 0.2, 0.8));
-    const line = reduceToLine([...ostinato, n(81, 0, 1, 0.55)], 0);
-    expect(pitches(line)).toEqual([81]);
-  });
-
-  it('never outputs overlapping notes', () => {
-    const line = reduceToLine(
-      [n(60, 0, 1), n(64, 0.5, 1, 0.9), n(67, 1.4, 0.5), n(62, 1.3, 0.2, 0.2)],
-      0,
-    );
-    for (let i = 1; i < line.length; i++) {
-      const prev = line[i - 1]!;
-      expect(line[i]!.onsetSec).toBeGreaterThanOrEqual(prev.onsetSec + prev.durSec - 1e-9);
-    }
-    expect(pitches(line)).toEqual([60, 64, 67]);
-  });
-
-  it('drops very short blips', () => {
-    const line = reduceToLine([n(60, 0, 0.5), n(90, 0.6, 0.02), n(62, 0.7, 0.5)], 0);
-    expect(pitches(line)).toEqual([60, 62]);
-  });
-
+describe('foldLine', () => {
   it('applies transpose before folding into the flute range', () => {
-    const line = reduceToLine([n(84, 0, 0.5), n(95, 0.6, 0.5)], 2);
+    const line = foldLine([n(84, 0, 0.5), n(95, 0.6, 0.5)], 2);
     expect(pitches(line)).toEqual([86, 85]);
   });
 
-  it('merges overlapping duplicate detections of one pitch into one note', () => {
-    const line = reduceToLine([n(60, 0, 0.5, 0.5), n(60, 0.3, 0.25, 0.9), n(62, 0.6, 0.5)], 0);
-    expect(line.map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
-      [60, 0, 0.55],
-      [62, 0.6, 0.5],
-    ]);
-  });
-
-  it('absorbs a weaker contiguous tail of the same pitch', () => {
-    const line = reduceToLine([n(60, 1.0, 0.48, 0.77), n(60, 1.48, 0.12, 0.5), n(62, 1.6, 0.48, 0.77)], 0);
-    expect(line.map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
-      [60, 1, 0.6],
-      [62, 1.6, 0.48],
-    ]);
-  });
-
-  it('does not let a sustained accompaniment note surface in short melody gaps', () => {
-    const melody = [n(60, 1.0, 0.5), n(62, 1.6, 0.5), n(64, 2.2, 0.5)];
-    const bass = n(48, 1.02, 1.6, 0.6);
-    expect(pitches(reduceToLine([...melody, bass], 0))).toEqual([60, 62, 64]);
-  });
-
-  it('keeps a lower note that sustains on alone after the melody stops', () => {
-    const line = reduceToLine([n(72, 0, 0.5), n(67, 0, 1.5, 0.5)], 0);
-    expect(pitches(line)).toEqual([72, 67]);
-  });
-
-  it('leaves out a bass line that sounds alone between melody notes far above it', () => {
-    const melody = [72, 74, 76, 77, 79, 77, 76, 74].map((midi, i) => n(midi, i, 0.6));
-    const bass = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => n(41, i + 0.6, 0.4, 0.7));
-    expect(pitches(reduceToLine([...melody, ...bass], 0))).toEqual([72, 74, 76, 77, 79, 77, 76, 74]);
-  });
-
-  it('drops the sliver of a held harmony note that starts just before the melody note covering it', () => {
-    const line = reduceToLine([n(71, 0.92, 1.66, 0.52), n(78, 1.03, 1.0, 0.54), n(76, 2.6, 1.0)], 0);
-    expect(pitches(line)).toEqual([78, 71, 76]);
-  });
-
   it('moves a note detected an octave away from the rest of its phrase back into the phrase', () => {
-    const line = reduceToLine([72, 74, 88, 76, 74, 86].map((midi, i) => n(midi, i * 0.5, 0.5)), 0);
+    const line = foldLine([72, 74, 88, 76, 74, 86].map((midi, i) => n(midi, i * 0.5, 0.5)), 0);
     expect(pitches(line)).toEqual([72, 74, 76, 76, 74, 74]);
   });
 
   it('keeps a phrase that climbs stepwise over more than an octave', () => {
     const scale = [72, 74, 76, 77, 79, 81, 83, 84, 86, 88];
-    expect(pitches(reduceToLine(scale.map((midi, i) => n(midi, i * 0.5, 0.5)), 0))).toEqual(scale);
+    expect(pitches(foldLine(scale.map((midi, i) => n(midi, i * 0.5, 0.5)), 0))).toEqual(scale);
   });
 
-  it('keeps repeated notes that are separately articulated', () => {
-    const line = reduceToLine([n(60, 0, 0.5), n(60, 0.6, 0.5)], 0);
-    expect(pitches(line)).toEqual([60, 60]);
+  it('judges each phrase on its own', () => {
+    const low = [60, 62, 64].map((midi, i) => n(midi, i * 0.5, 0.5));
+    const high = [84, 86, 88].map((midi, i) => n(midi, 3 + i * 0.5, 0.5));
+    expect(pitches(foldLine([...low, ...high], 0))).toEqual([60, 62, 64, 84, 86, 88]);
   });
 });
 
@@ -170,7 +100,7 @@ describe('applyDifficulty', () => {
 
   it("turns a held note with a 40 ms semitone wobble into one note in 'melody'", () => {
     const wobble = [n(76, 1.0, 1.0), n(77, 2.0, 0.04), n(76, 2.04, 0.96, 0.8, 0.5)];
-    const out = applyDifficulty(reduceToLine(wobble, 0), 'melody', sixteenth);
+    const out = applyDifficulty(foldLine(wobble, 0), 'melody', sixteenth);
     expect(out.map((x) => [x.midi, x.onsetSec])).toEqual([[76, 1.0]]);
     expect(out[0]!.durSec).toBeCloseTo(2.0);
   });
