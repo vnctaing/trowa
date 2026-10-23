@@ -12,6 +12,8 @@ const REARTICULATION_ONSET = 0.8;
 const REVEALED_AFTER_SEC = 0.15;
 const REVEALED_MIN_SEC = 0.25;
 const SHORT_NOTE_FRACTION_OF_16TH = 0.75;
+const REGISTER_QUANTILE = 0.75;
+const BELOW_REGISTER_SEMITONES = 19;
 
 export function foldIntoFlute(midi: number): Midi {
   let m = Math.round(midi);
@@ -44,9 +46,18 @@ function absorbWeakerTails(notes: readonly DetectedNote[]): DetectedNote[] {
   return out;
 }
 
+function registerFloor(notes: readonly DetectedNote[]): number {
+  const weighted = notes.map((x) => ({ midi: x.midi, weight: x.durSec * x.amplitude })).sort((a, b) => a.midi - b.midi);
+  const target = REGISTER_QUANTILE * weighted.reduce((sum, x) => sum + x.weight, 0);
+  let seen = 0;
+  const upper = weighted.find((x) => (seen += x.weight) >= target) ?? weighted.at(-1)!;
+  return upper.midi - BELOW_REGISTER_SEMITONES;
+}
+
 export function reduceToLine(detected: readonly DetectedNote[], transpose: number): DetectedNote[] {
   if (detected.length === 0) return [];
-  const notes = absorbWeakerTails(detected);
+  const floor = registerFloor(detected);
+  const notes = absorbWeakerTails(detected.filter((x) => x.midi >= floor));
   const frameOf = (sec: number) => Math.round(sec * FRAMES_PER_SEC);
   const totalFrames = Math.max(...notes.map((x) => frameOf(x.onsetSec + x.durSec)));
   const winner = new Int32Array(totalFrames).fill(-1);

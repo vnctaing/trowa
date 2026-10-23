@@ -56,8 +56,8 @@ describe('reduceToLine', () => {
   });
 
   it('applies transpose before folding into the flute range', () => {
-    const line = reduceToLine([n(60, 0, 0.5), n(95, 0.6, 0.5)], 2);
-    expect(pitches(line)).toEqual([62, 85]);
+    const line = reduceToLine([n(84, 0, 0.5), n(95, 0.6, 0.5)], 2);
+    expect(pitches(line)).toEqual([86, 85]);
   });
 
   it('merges overlapping duplicate detections of one pitch into one note', () => {
@@ -85,6 +85,12 @@ describe('reduceToLine', () => {
   it('keeps a lower note that sustains on alone after the melody stops', () => {
     const line = reduceToLine([n(72, 0, 0.5), n(67, 0, 1.5, 0.5)], 0);
     expect(pitches(line)).toEqual([72, 67]);
+  });
+
+  it('leaves out a bass line that sounds alone between melody notes far above it', () => {
+    const melody = [72, 74, 76, 77, 79, 77, 76, 74].map((midi, i) => n(midi, i, 0.6));
+    const bass = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => n(41, i + 0.6, 0.4, 0.7));
+    expect(pitches(reduceToLine([...melody, ...bass], 0))).toEqual([72, 74, 76, 77, 79, 77, 76, 74]);
   });
 
   it('keeps repeated notes that are separately articulated', () => {
