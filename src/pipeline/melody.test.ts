@@ -93,6 +93,11 @@ describe('reduceToLine', () => {
     expect(pitches(reduceToLine([...melody, ...bass], 0))).toEqual([72, 74, 76, 77, 79, 77, 76, 74]);
   });
 
+  it('drops the sliver of a held harmony note that starts just before the melody note covering it', () => {
+    const line = reduceToLine([n(71, 0.92, 1.66, 0.52), n(78, 1.03, 1.0, 0.54), n(76, 2.6, 1.0)], 0);
+    expect(pitches(line)).toEqual([78, 71, 76]);
+  });
+
   it('keeps repeated notes that are separately articulated', () => {
     const line = reduceToLine([n(60, 0, 0.5), n(60, 0.6, 0.5)], 0);
     expect(pitches(line)).toEqual([60, 60]);

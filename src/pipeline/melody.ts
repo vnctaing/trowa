@@ -89,7 +89,8 @@ export function reduceToLine(detected: readonly DetectedNote[], transpose: numbe
     const src = notes[winner[start]!];
     const durSec = (f - start) / FRAMES_PER_SEC;
     const revealed = src !== undefined && start / FRAMES_PER_SEC - src.onsetSec > REVEALED_AFTER_SEC;
-    if (src !== undefined && durSec >= (revealed ? REVEALED_MIN_SEC : MIN_BLIP_SEC)) {
+    const covered = src !== undefined && src.onsetSec + src.durSec - f / FRAMES_PER_SEC > REVEALED_AFTER_SEC;
+    if (src !== undefined && durSec >= (revealed || covered ? REVEALED_MIN_SEC : MIN_BLIP_SEC)) {
       line.push({
         midi: foldIntoFlute(src.midi + transpose),
         onsetSec: start / FRAMES_PER_SEC,
