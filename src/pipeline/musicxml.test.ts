@@ -124,6 +124,7 @@ describe('toMusicXml', () => {
     expect([text(root, 'beats'), text(root, 'beat-type')]).toEqual(['3', '4']);
     expect([text(root, 'sign'), text(root, 'line')]).toEqual(['G', '2']);
     expect(text(root, 'per-minute')).toBe('88');
+    expect(root.getElementsByTagName('sound')[0]?.getAttribute('tempo')).toBe('87.6');
   });
 
   it('spells black keys with sharps in sharp keys and flats in flat keys', () => {

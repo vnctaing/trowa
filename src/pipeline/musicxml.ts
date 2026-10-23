@@ -162,7 +162,7 @@ export function toMusicXml(score: Score): string {
     const attributes =
       i === 0
         ? `<attributes><divisions>${TICKS_PER_QUARTER}</divisions><key><fifths>${score.keyFifths}</fifths><mode>major</mode></key><time><beats>${score.beatsPerBar}</beats><beat-type>${score.beatUnit}</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
-      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${bpm}</per-minute></metronome></direction-type><sound tempo="${bpm}"/></direction>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${bpm}</per-minute></metronome></direction-type><sound tempo="${score.bpm}"/></direction>
       `
         : '';
     const barline = i === bars.length - 1 ? '\n      <barline location="right"><bar-style>light-heavy</bar-style></barline>' : '';
