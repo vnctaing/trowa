@@ -47,7 +47,7 @@ npx tsx scripts/bench/run.ts --approach tracker
 
 `inspect.ts <track> --from <sec> --to <sec>` prints the truth, the tracked line and the score side by side for one window.
 
-`real.ts` scores real recordings in three tiers (flute alone, flute with accompaniment, melody on another instrument). `scripts/bench/real/manifest.json` lists each recording and score with its source URL and license; the files themselves live under `.cache/real/<slug>/` as `mix.wav` and `score.mid` and are not committed. The melody track of the MIDI is aligned to the recording by DTW over Basic Pitch's pitch-class activations, and the report shows the alignment fit next to the scores.
+`real.ts` scores real recordings in three tiers (flute alone, flute with accompaniment, melody on another instrument). `scripts/bench/real/manifest.json` lists each recording and score with its source URL and license; `python3 scripts/bench/real/fetch.py` downloads them into `.cache/real/<slug>/` as `mix.wav` and `score.mid`; they are not committed. The melody track of the MIDI is aligned to the recording by DTW over Basic Pitch's pitch-class activations, and the report shows the alignment fit next to the scores.
 
 ## Test
 
