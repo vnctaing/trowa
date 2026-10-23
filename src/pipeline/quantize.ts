@@ -12,6 +12,8 @@ const MIN_BPM = 50;
 const MAX_BPM = 200;
 const PREFERRED_BPM = 110;
 const PHASE_LOCK_GAIN = 0.1;
+const PHASE_STEPS = 48;
+const PHASE_KERNEL_BEATS = 0.125;
 const TRIPLE_METER_MARGIN = 1.25;
 const METER_LEVEL_WEIGHTS = [1, 0.5, 0.25];
 
@@ -67,12 +69,36 @@ export function estimateTempo(onsetsSec: readonly number[]): number {
   return Math.round(bpm * 100) / 100;
 }
 
+function beatPhaseSec(notes: readonly MelodyNote[], beatSec: number): number {
+  const first = notes[0]!.onsetSec;
+  const offsets = Array.from({ length: PHASE_STEPS }, (_, k) => k - PHASE_STEPS / 2).sort((a, b) => Math.abs(a) - Math.abs(b));
+  let best = 0;
+  let bestScore = -1;
+  for (const offset of offsets) {
+    const phase = (offset / PHASE_STEPS) * beatSec;
+    let score = 0;
+    for (const note of notes) {
+      const beats = (note.onsetSec - first - phase) / beatSec;
+      const distance = Math.abs(beats - Math.round(beats));
+      score += Math.min(note.durSec, beatSec) * Math.exp(-0.5 * (distance / PHASE_KERNEL_BEATS) ** 2);
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = phase;
+    }
+  }
+  return best;
+}
+
 export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks, legatoTicks }: Notation = DETAILED): QuantizedNote[] {
   const principal = notes.filter((x) => x.ornament !== 'grace');
   const first = principal[0];
   if (first === undefined) return [];
   const step = sixteenthSec(bpm);
-  let origin = first.onsetSec;
+  const beatSec = step * TICKS_PER_QUARTER;
+  const phase = beatPhaseSec(principal, beatSec);
+  const opensOnBeat = first.durSec >= beatSec;
+  let origin = first.onsetSec + (phase > 0 && !opensOnBeat ? phase - beatSec : phase);
 
   type Placed = { midi: MelodyNote['midi']; start: number; end: number; graces: MelodyNote[] };
   const placed: Placed[] = [];
@@ -84,8 +110,9 @@ export function quantize(notes: readonly MelodyNote[], bpm: number, { gridTicks,
     }
     const snap = (sec: number) => gridTicks * Math.round((sec - origin) / step / gridTicks);
     const prev = placed[placed.length - 1];
-    const start = Math.max(snap(note.onsetSec), prev ? prev.start + gridTicks : 0);
-    origin += PHASE_LOCK_GAIN * (note.onsetSec - (origin + start * step));
+    const snapped = snap(note.onsetSec);
+    const start = prev ? Math.max(snapped, prev.start + gridTicks) : opensOnBeat ? 0 : snapped;
+    if (start === snapped) origin += PHASE_LOCK_GAIN * (note.onsetSec - (origin + start * step));
     const end = Math.max(start + gridTicks, snap(note.onsetSec + note.durSec));
     placed.push({ midi: note.midi, start, end, graces: pendingGraces });
     pendingGraces = [];

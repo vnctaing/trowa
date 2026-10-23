@@ -104,6 +104,20 @@ describe('quantize', () => {
     expect(timeline(quantize(notes, 100))).toContainEqual([null, 2, 2]);
   });
 
+  it('takes the beat phase from the onsets, not from a long first note played early', () => {
+    const onBeat = [3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0].map((t, i) => m(62 + (i % 4), t, 0.45));
+    const out = quantize([m(60, 0.8, 2.6), ...onBeat], 120, { gridTicks: 2, legatoTicks: 0 });
+    const starts = out.filter((x) => x.midi !== null).map((x) => x.startTick);
+    expect(starts[0]).toBe(0);
+    expect(starts.slice(1).map((s) => s % 4)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('writes a short first note half a beat before the beat as a pickup after a rest', () => {
+    const onBeat = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5].map((t, i) => m(62 + (i % 4), t, 0.45));
+    const out = quantize([m(60, 0.75, 0.2), ...onBeat], 120, { gridTicks: 2, legatoTicks: 0 });
+    expect(out.filter((x) => x.midi !== null).map((x) => x.startTick)).toEqual([2, 4, 8, 12, 16, 20, 24]);
+  });
+
   it('produces a gapless, non-overlapping timeline', () => {
     const out = quantize(beatsToNotes(TWINKLE_BEATS, 100), 100);
     const timed = out.filter((x) => x.ornament !== 'grace');

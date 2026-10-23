@@ -46,6 +46,7 @@ function melodyFromMidi(entry: Entry): TruthNote[] {
         );
   if (!track) throw new Error(`${entry.slug}: no track ${String(wanted)} in ${midi.tracks.map((t, i) => `${i}:${t.name}`).join(', ')}`);
   const notes = [...track.notes].sort((a, b) => a.time - b.time || b.midi - a.midi);
+  const ppq = midi.header.ppq;
   const transpose = entry.score.transpose ?? 0;
   const end = Math.max(...notes.map((n) => n.time + n.duration));
   const steps = Math.ceil(end / SCORE_STEP_SEC) + 1;
@@ -61,7 +62,11 @@ function melodyFromMidi(entry: Entry): TruthNote[] {
   for (let s = 1; s <= steps; s++) {
     if (s < steps && top[s] === top[start]) continue;
     const i = top[start]!;
-    if (i >= 0) out.push({ midi: notes[i]!.midi + transpose, startSec: start * SCORE_STEP_SEC, endSec: s * SCORE_STEP_SEC });
+    if (i >= 0) {
+      const startSec = start * SCORE_STEP_SEC;
+      const beat = midi.header.secondsToTicks(startSec) / ppq;
+      out.push({ midi: notes[i]!.midi + transpose, startSec, endSec: s * SCORE_STEP_SEC, beat });
+    }
     start = s;
   }
   return out;
@@ -186,7 +191,7 @@ async function truthFor(entry: Entry, a: Activations, refit: boolean): Promise<A
   const melody = melodyFromMidi(entry);
   const { toSec, pathCost } = align(melody, a);
   const notes = melody
-    .map((n) => ({ midi: n.midi, startSec: toSec(n.startSec), endSec: toSec(n.endSec) }))
+    .map((n) => ({ ...n, startSec: toSec(n.startSec), endSec: toSec(n.endSec) }))
     .filter((n) => n.endSec > n.startSec);
   const truth: Aligned = {
     slug: entry.slug,
@@ -208,11 +213,25 @@ async function truthFor(entry: Entry, a: Activations, refit: boolean): Promise<A
 const f = (x: number) => x.toFixed(3);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 
+export type RealSet = { entry: Entry; name: string; truth: Aligned; window: [number, number]; alignedEnd: number };
+
+export async function realSets(refit = false, only?: string): Promise<RealSet[]> {
+  const entries: Entry[] = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  const sets: RealSet[] = [];
+  for (const entry of entries.filter((e) => !only || e.slug === only)) {
+    const a = await ensureActivations(entry);
+    const truth = await truthFor(entry, a, refit);
+    const window: [number, number] = [truth.notes[0]!.startSec, truth.notes.at(-1)!.endSec];
+    const alignedEnd = Math.min(window[1], alignedThroughSec(truth.fitProfile, window[0]));
+    sets.push({ entry, name: `real-${entry.slug}`, truth, window, alignedEnd });
+  }
+  return sets;
+}
+
 async function main() {
   const { values } = parseArgs({
     options: { refit: { type: 'boolean', default: false }, out: { type: 'string' }, only: { type: 'string' } },
   });
-  const entries: Entry[] = JSON.parse(readFileSync(MANIFEST, 'utf8'));
   const lines: string[] = [];
   const say = (s: string) => {
     lines.push(s);
@@ -224,13 +243,9 @@ async function main() {
     '| tier | track | approach | F0.5 | precision | recall | recall pc | wrong | octave | in rest | onset hit | notes/bar | align fit | align cost | aligned opening: F0.5 P/R |',
   );
   say('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
-  for (const entry of entries.filter((e) => !values.only || e.slug === values.only)) {
-    const a = await ensureActivations(entry);
-    const truth = await truthFor(entry, a, values.refit);
-    const window: [number, number] = [truth.notes[0]!.startSec, truth.notes.at(-1)!.endSec];
-    const alignedEnd = Math.min(window[1], alignedThroughSec(truth.fitProfile, window[0]));
+  for (const { entry, name, truth, window, alignedEnd } of await realSets(values.refit, values.only)) {
     for (const approach of Object.values(APPROACHES)) {
-      const c = candidate(`real-${entry.slug}`, approach);
+      const c = candidate(name, approach);
       const m = measure(c, { ...truth, windowSec: window });
       const opening = alignedEnd > window[0] ? measure(c, { ...truth, windowSec: [window[0], alignedEnd] }) : null;
       byTier[approach.name] ??= {};
@@ -262,4 +277,4 @@ async function main() {
   }
 }
 
-await main();
+if (process.argv[1]?.endsWith('real.ts')) await main();

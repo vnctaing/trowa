@@ -7,7 +7,7 @@ const RATE = 22050;
 const LEAD_IN_SEC = 1;
 const TAIL_SEC = 1.5;
 
-export type TruthNote = { midi: number; startSec: number; endSec: number };
+export type TruthNote = { midi: number; startSec: number; endSec: number; beat: number };
 export type Truth = { bpm: number; beatsPerBar: number; beatUnit: number; notes: TruthNote[]; durationSec: number };
 
 type Timbre = 'flute' | 'vocal';
@@ -129,22 +129,21 @@ const TWINKLE = `${TWINKLE_BAR} G4:1 G4:1 F4:1 F4:1 E4:1 E4:1 D4:2 G4:1 G4:1 F4:
 export function twinkleTruth(): Truth {
   const events = parseMelody(TWINKLE, 60 / 100);
   const last = events.at(-1)!;
-  const notes = events.map((e) => ({ midi: e.midi!, startSec: e.startSec, endSec: e.startSec + e.durSec }));
+  const notes = events.map((e) => ({ midi: e.midi!, startSec: e.startSec, endSec: e.startSec + e.durSec, beat: e.beat }));
   return { bpm: 100, beatsPerBar: 4, beatUnit: 4, notes, durationSec: last.startSec + last.durSec + 1 };
 }
 
 export type Variant = 'solo' | 'band' | 'under';
 export const VARIANTS: readonly Variant[] = ['solo', 'band', 'under'];
 
-type Event = { midi: number | null; startSec: number; durSec: number };
+type Event = { midi: number | null; startSec: number; durSec: number; beat: number };
 
 function parseMelody(melody: string, beatSec: number): Event[] {
-  let t = LEAD_IN_SEC;
+  let beat = 0;
   return melody.split(/\s+/).map((token) => {
     const [pitch, beats] = token.split(':');
-    const durSec = Number(beats) * beatSec;
-    const event = { midi: pitch === 'r' ? null : midiOf(pitch!), startSec: t, durSec };
-    t += durSec;
+    const event = { midi: pitch === 'r' ? null : midiOf(pitch!), startSec: LEAD_IN_SEC + beat * beatSec, durSec: Number(beats) * beatSec, beat };
+    beat += Number(beats);
     return event;
   });
 }
@@ -304,7 +303,9 @@ export function renderSong(song: Song, variant: Variant): { samples: Float32Arra
   }
 
   const samples = softLimit(variant === 'solo' ? out : reverb(out));
-  const notes = events.filter((e) => e.midi !== null).map((e) => ({ midi: e.midi!, startSec: e.startSec, endSec: e.startSec + e.durSec }));
+  const notes = events
+    .filter((e) => e.midi !== null)
+    .map((e) => ({ midi: e.midi!, startSec: e.startSec, endSec: e.startSec + e.durSec, beat: e.beat }));
   return { samples, truth: { bpm: song.bpm, beatsPerBar: song.beatsPerBar, beatUnit: song.beatUnit, notes, durationSec } };
 }
 

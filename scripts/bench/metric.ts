@@ -1,10 +1,11 @@
 import { TICKS_PER_QUARTER, type DetectedNote, type QuantizedNote, type Score } from '../../src/domain';
 import type { Timing } from '../../src/pipeline/score';
-import type { Truth } from './synth';
+import type { Truth, TruthNote } from './synth';
 
 const FRAME_SEC = 0.01;
 const ONSET_TOLERANCE_SEC = 0.08;
 const PRECISION_WEIGHT = 0.5;
+const BEAT_TOLERANCE = 0.06;
 
 export type Candidate = { line: readonly DetectedNote[]; score: Score; timing: readonly Timing[] };
 export type Intrusions = { other: number; octave: number; rest: number };
@@ -26,7 +27,19 @@ export type Metrics = {
   notes: number;
   notesPerBar: { median: number; max: number };
   sixteenthShare: number;
+  offBeat: number;
+  tiedOverBeat: number;
+  rhythm: Rhythm;
   exact: boolean;
+};
+
+export type Rhythm = {
+  matched: number;
+  refOffBeat: number;
+  spuriousOffBeat: number;
+  missedOffBeat: number;
+  onsetBiasMs: number;
+  onsetSpreadMs: number;
 };
 
 const ratio = (part: number, whole: number) => (whole === 0 ? 0 : Math.round((1000 * part) / whole) / 1000);
@@ -114,19 +127,58 @@ const median = (xs: number[]) => {
   return s.length === 0 ? 0 : s.length % 2 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
 };
 
+const beatTicksOf = (score: Score) => (score.beatUnit === 8 ? (TICKS_PER_QUARTER * 3) / 2 : TICKS_PER_QUARTER);
+const onOurBeat = (score: Score, tick: number) => tick % beatTicksOf(score) === 0;
+
+function onRefBeat(truth: Truth, note: TruthNote): boolean {
+  const group = truth.beatUnit === 8 ? 3 : 1;
+  const phase = note.beat % group;
+  return Math.min(phase, group - phase) < BEAT_TOLERANCE;
+}
+
 function readability(score: Score) {
   const sounding = score.notes.filter((n) => n.midi !== null && n.ornament !== 'grace');
   const barTicks = score.beatsPerBar * (score.beatUnit === 4 ? TICKS_PER_QUARTER : TICKS_PER_QUARTER / 2);
+  const beatTicks = beatTicksOf(score);
   const bars = new Map<number, number>();
   for (const n of sounding) {
     const bar = Math.floor(n.startTick / barTicks);
     bars.set(bar, (bars.get(bar) ?? 0) + 1);
   }
   const counts = [...bars.values()];
+  const offBeat = sounding.filter((n) => !onOurBeat(score, n.startTick));
+  const nextBeat = (tick: number) => (Math.floor(tick / beatTicks) + 1) * beatTicks;
   return {
     notes: sounding.length,
     notesPerBar: { median: median(counts), max: Math.max(0, ...counts) },
     sixteenthShare: ratio(sounding.filter((n) => n.durTicks === 1).length, sounding.length),
+    offBeat: ratio(offBeat.length, sounding.length),
+    tiedOverBeat: ratio(offBeat.filter((n) => n.startTick + n.durTicks > nextBeat(n.startTick)).length, sounding.length),
+  };
+}
+
+function rhythm(score: Score, timing: readonly Timing[], truth: Truth, refOnsets: readonly TruthNote[]): Rhythm {
+  const refOff = refOnsets.filter((n) => !onRefBeat(truth, n)).length;
+  const matches = refOnsets.flatMap((n) => {
+    const nearest = timing.reduce<Timing | null>(
+      (best, t) => (Math.abs(t.sec - n.startSec) < Math.abs((best?.sec ?? Infinity) - n.startSec) ? t : best),
+      null,
+    );
+    if (nearest === null || Math.abs(nearest.sec - n.startSec) > ONSET_TOLERANCE_SEC) return [];
+    return [{ refOn: onRefBeat(truth, n), oursOn: onOurBeat(score, nearest.tick), errorSec: nearest.sec - n.startSec }];
+  });
+  const errors = matches.map((m) => m.errorSec * 1000);
+  const q = (p: number) => {
+    const s = [...errors].sort((a, b) => a - b);
+    return s.length === 0 ? 0 : s[Math.min(s.length - 1, Math.floor(p * s.length))]!;
+  };
+  return {
+    matched: matches.length,
+    refOffBeat: ratio(refOff, refOnsets.length),
+    spuriousOffBeat: ratio(matches.filter((m) => m.refOn && !m.oursOn).length, matches.length),
+    missedOffBeat: ratio(matches.filter((m) => !m.refOn && m.oursOn).length, matches.length),
+    onsetBiasMs: Math.round(median(errors)),
+    onsetSpreadMs: Math.round(q(0.75) - q(0.25)),
   };
 }
 
@@ -187,6 +239,7 @@ export function measure(candidate: Candidate, truth: Judged): Metrics {
     onsetHit: ratio(hit, refOnsets.length),
     tempoRatio: Math.round((1000 * candidate.score.bpm) / truthQuarterBpm) / 1000,
     ...readability(candidate.score),
+    rhythm: rhythm(candidate.score, candidate.timing, truth, refOnsets),
     exact: exactMatch(candidate.score, truth),
   };
 }

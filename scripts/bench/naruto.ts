@@ -48,6 +48,7 @@ export function narutoTruth(): NarutoTruth {
             midi: midiOf(pitch!) + align.transpose,
             startSec: secAt(section, beat),
             endSec: secAt(section, beat + beats),
+            beat,
             bar,
             confidence: kind as Confidence,
           });
