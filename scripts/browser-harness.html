@@ -5,10 +5,8 @@
 <script type="module">
 import { runPipeline, toMusicXml, lookupYoutube, transposeScore } from '/src/pipeline/index.ts';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { getBackend, loadGraphModel } from '@tensorflow/tfjs';
 import { decodeAudio, toMonoPcm, PITCH_SAMPLE_RATE } from '/src/pipeline/decode.ts';
-import { separateLead, leadEmphasis } from '/src/pipeline/separate.ts';
-import { detectNotes } from '/src/pipeline/pitch.ts';
+import { Analysis } from '/src/pipeline/analysis.ts';
 const out = document.getElementById('log');
 const log = (s) => { out.textContent += s + '\n'; console.log(s); };
 const params = new URLSearchParams(location.search);
@@ -22,6 +20,7 @@ async function transcribe(path) {
   const blob = await (await fetch(path)).blob();
   const file = new File([blob], path.split('/').pop(), { type: 'audio/wav' });
   let progress = 0;
+  let found = 0;
   const t0 = performance.now();
   try {
     const score = await runPipeline({ kind: 'file', file, title: file.name }, { transpose: 0, key: 'auto', difficulty: 'melody', tempoOverride: null }, (e) => {
@@ -29,8 +28,10 @@ async function transcribe(path) {
       if (e.type === 'audio') log(`audio event: ${e.buffer.duration.toFixed(2)}s ${e.buffer.sampleRate}Hz ${e.buffer.numberOfChannels}ch`);
       if (e.type === 'notes') log(`notes event: ${e.notes.length} raw notes`);
       if (e.type === 'progress') progress++;
+      if (e.type === 'notesFound') found += e.notes.length;
     });
-    log(`progress events: ${progress}, tf backend: ${getBackend()}`);
+    window.__score = score;
+    log(`progress events: ${progress}, partial notes: ${found}`);
     const shown = params.get('transpose') ? transposeScore(score, Number(params.get('transpose'))) : score;
     log(`score: bpm ${shown.bpm}, ${shown.beatsPerBar}/${shown.beatUnit}, keyFifths ${shown.keyFifths}, confidence ${shown.confidence}, ${shown.notes.filter(n => n.midi !== null).length} notes`);
     const xml = toMusicXml(shown);
@@ -57,13 +58,18 @@ async function capture() {
   const yt = params.get('yt');
   const path = yt ? `/api/youtube/audio?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${yt}`)}` : params.get('wav');
   const bytes = await (await fetch(path)).arrayBuffer();
-  const mix = await toMonoPcm(await decodeAudio(bytes), PITCH_SAMPLE_RATE);
-  const wanted = params.get('sep') ?? 'demucs';
-  const lead = wanted === 'filter' ? { samples: leadEmphasis(mix), method: 'filter' } : await separateLead(mix, { endpoint: '/api/separate' });
-  if (lead.method !== wanted) throw new Error(`asked for ${wanted} separation, got ${lead.method}`);
-  const detection = await detectNotes(loadGraphModel('/models/basic-pitch/model.json'), lead.samples, () => {});
-  window.__capture = { source: yt ?? path, separation: lead.method, durationSec: mix.samples.length / mix.sampleRate, ...detection };
-  log(`captured ${detection.notes.length} notes via ${lead.method}`);
+  const analysis = new Analysis();
+  log(`pitch backend: ${await analysis.load('/models/basic-pitch/model.json')}`);
+  const { durationSec } = await analysis.hold(await toMonoPcm(await decodeAudio(bytes), PITCH_SAMPLE_RATE));
+  await analysis.emphasize();
+  const separation = params.get('sep') ?? 'demucs';
+  if (separation === 'demucs') {
+    if ((await analysis.demucs('/api/separate')) === null) throw new Error('asked for demucs separation, got filter');
+  }
+  const detection = await analysis.detect(() => {}, () => {});
+  analysis.close();
+  window.__capture = { source: yt ?? path, separation, durationSec, ...detection };
+  log(`captured ${detection.notes.length} notes via ${separation}`);
 }
 try {
   if (params.get('mode') === 'capture') await capture();

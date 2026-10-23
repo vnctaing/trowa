@@ -64,11 +64,25 @@ export class TrowaError extends Error {
   }
 }
 
+export const SIGNATURE_SLICES = 192;
+
+export type TrackSignature = {
+  durationSec: number;
+  bpm: number;
+  energy: Float32Array;
+  brightness: Float32Array;
+};
+
+export type LeadBalance = { method: 'demucs' | 'filter'; share: Float32Array };
+
 export type PipelineEvent =
   | { type: 'stage'; stage: StageId }
   | { type: 'audio'; buffer: AudioBuffer }
   | { type: 'notes'; notes: DetectedNote[] }
-  | { type: 'progress'; stage: StageId; fraction: number };
+  | { type: 'progress'; stage: StageId; fraction: number }
+  | { type: 'signature'; signature: TrackSignature }
+  | { type: 'lead'; lead: LeadBalance }
+  | { type: 'notesFound'; notes: DetectedNote[]; throughSec: number };
 
 export type AppState =
   | { screen: 'input' }

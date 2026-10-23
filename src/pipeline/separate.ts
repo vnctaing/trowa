@@ -1,8 +1,4 @@
-import { throwIfAborted } from './abort';
-import { decodeWav, encodeWav, type MonoPcm } from './wav';
-
-export type SeparationMethod = 'demucs' | 'filter';
-export type Separation = { samples: Float32Array; method: SeparationMethod };
+import type { MonoPcm } from './wav';
 
 const LEAD_LOW_HZ = 200;
 const LEAD_HIGH_HZ = 4000;
@@ -37,25 +33,7 @@ export function leadEmphasis({ samples, sampleRate }: MonoPcm): Float32Array {
   return biquad(biquad(high, sampleRate, 'lowpass', LEAD_HIGH_HZ), sampleRate, 'lowpass', LEAD_HIGH_HZ);
 }
 
-export async function separateLead(
-  mix: MonoPcm,
-  { endpoint, signal }: { endpoint: string; signal?: AbortSignal },
-): Promise<Separation> {
-  const fallback = (): Separation => ({ samples: leadEmphasis(mix), method: 'filter' });
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'audio/wav' },
-      body: encodeWav(mix),
-      signal,
-    });
-  } catch {
-    throwIfAborted(signal);
-    return fallback();
-  }
-  if (!response.ok) return fallback();
-  const stem = decodeWav(await response.arrayBuffer());
-  if (stem === null || stem.sampleRate !== mix.sampleRate) return fallback();
-  return { samples: stem.samples, method: 'demucs' };
+export async function requestStem(wav: ArrayBuffer, endpoint: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'audio/wav' }, body: wav }).catch(() => null);
+  return response?.ok ? response.arrayBuffer() : null;
 }
