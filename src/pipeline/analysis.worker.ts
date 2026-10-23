@@ -4,7 +4,7 @@ import { TrowaError } from '../domain';
 import type { AnalysisMessage, AnalysisReply, AnalysisRequest } from './analysis';
 import { detectNotes } from './pitch';
 import { leadEmphasis, requestStem } from './separate';
-import { leadShare, trackSignature } from './signature';
+import { leadShare, stemCarriesLead, trackSignature } from './signature';
 import { decodeWav, encodeWav, type MonoPcm } from './wav';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -41,8 +41,10 @@ async function handle(id: number, request: AnalysisRequest): Promise<AnalysisRep
       const bytes = await requestStem(encodeWav(held()).buffer, request.endpoint);
       const stem = bytes === null ? null : decodeWav(bytes);
       if (stem === null || stem.sampleRate !== held().sampleRate) return null;
+      const share = leadShare(held().samples, stem.samples);
+      if (!stemCarriesLead(share)) return null;
       lead = stem.samples;
-      return leadShare(held().samples, lead);
+      return share;
     }
     case 'detect': {
       if (!model || !lead) throw new Error('analysis worker: detect needs a loaded model and a lead');
