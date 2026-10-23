@@ -8,6 +8,7 @@ const m = (midi: number, onsetSec: number, durSec: number, ornament?: 'grace'): 
   onsetSec,
   durSec,
   amplitude: 0.8,
+  onset: 0.9,
   ...(ornament ? { ornament } : {}),
 });
 

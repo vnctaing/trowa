@@ -8,6 +8,7 @@ const TAIL_GAP_SEC = 0.02;
 const TAIL_AMPLITUDE_RATIO = 0.85;
 const FRAGMENT_SIXTEENTHS = 2;
 const FRAGMENT_GAP_SEC = 0.05;
+const REARTICULATION_ONSET = 0.8;
 const REVEALED_AFTER_SEC = 0.15;
 const REVEALED_MIN_SEC = 0.25;
 const SHORT_NOTE_FRACTION_OF_16TH = 0.75;
@@ -83,6 +84,7 @@ export function reduceToLine(detected: readonly DetectedNote[], transpose: numbe
         onsetSec: start / FRAMES_PER_SEC,
         durSec,
         amplitude: src.amplitude,
+        onset: revealed ? 0 : src.onset,
       });
     }
     start = f;
@@ -102,7 +104,7 @@ const mergeFragments: Simplification = (line, sixteenthSec) => {
       prev !== undefined &&
       prev.midi === note.midi &&
       note.onsetSec - (prev.onsetSec + prev.durSec) < FRAGMENT_GAP_SEC &&
-      note.durSec < sixteenthSec * FRAGMENT_SIXTEENTHS;
+      (note.durSec < sixteenthSec * FRAGMENT_SIXTEENTHS || note.onset < REARTICULATION_ONSET);
     if (isFragment) prev.durSec = note.onsetSec + note.durSec - prev.onsetSec;
     else out.push({ ...note });
   }

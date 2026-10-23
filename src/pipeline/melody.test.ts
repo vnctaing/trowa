@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { DetectedNote, Midi } from '../domain';
 import { applyDifficulty, foldIntoFlute, reduceToLine } from './melody';
 
-const n = (midi: number, onsetSec: number, durSec: number, amplitude = 0.8): DetectedNote => ({
+const n = (midi: number, onsetSec: number, durSec: number, amplitude = 0.8, onset = 0.9): DetectedNote => ({
   midi: midi as Midi,
   onsetSec,
   durSec,
   amplitude,
+  onset,
 });
 
 const pitches = (notes: { midi: number }[]) => notes.map((x) => x.midi);
@@ -115,6 +116,14 @@ describe('applyDifficulty', () => {
     const held = [n(64, 1.0, 0.25), n(64, 1.28, 0.2), n(64, 1.51, 0.22), n(64, 1.76, 0.2), n(67, 2.0, 0.6)];
     expect(applyDifficulty(held, 'melody', sixteenth).map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
       [64, 1.0, 0.96],
+      [67, 2.0, 0.6],
+    ]);
+  });
+
+  it("joins a long same-pitch re-onset that Basic Pitch heard no attack for in 'melody'", () => {
+    const held = [n(64, 1.0, 0.5), n(64, 1.5, 0.5, 0.7, 0.55), n(67, 2.0, 0.6)];
+    expect(applyDifficulty(held, 'melody', sixteenth).map((x) => [x.midi, x.onsetSec, x.durSec])).toEqual([
+      [64, 1.0, 1.0],
       [67, 2.0, 0.6],
     ]);
   });

@@ -9,7 +9,7 @@ if (!target || !['demucs', 'filter'].includes(separation)) {
 }
 const isWav = target.endsWith('.wav');
 const name = isWav ? target.split('/').pop().replace(/\.wav$/, '') : target;
-const out = join('.cache/notes', `${name}-${separation}.json`);
+const out = join(process.env.NOTES_DIR ?? '.cache/notes', `${name}-${separation}.json`);
 if (existsSync(out) && !process.env.FORCE) {
   console.log(`${out} exists, set FORCE=1 to recapture`);
   process.exit(0);
@@ -30,6 +30,6 @@ if (!capture) {
   console.error('capture failed, see console output above');
   process.exit(1);
 }
-mkdirSync('.cache/notes', { recursive: true });
+mkdirSync(process.env.NOTES_DIR ?? '.cache/notes', { recursive: true });
 writeFileSync(out, JSON.stringify(capture));
 console.log(`wrote ${out}: ${capture.notes.length} notes, ${capture.durationSec.toFixed(1)} s audio, ${((Date.now() - started) / 1000).toFixed(1)} s`);

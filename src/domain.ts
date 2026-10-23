@@ -20,6 +20,7 @@ export type DetectedNote = {
   onsetSec: number;
   durSec: number;
   amplitude: number;
+  onset: number;
 };
 
 export type QuantizedNote = {

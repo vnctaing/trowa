@@ -40,7 +40,7 @@ describe('transposeScore', () => {
 
 const C_MAJOR_TUNE = [60, 62, 64, 65, 67, 65, 64, 62, 60, 64, 67, 72, 67, 64, 60, 60];
 const detected = (midis: number[], beatSec = 0.6): DetectedNote[] =>
-  midis.map((m, i) => ({ midi: m as Midi, onsetSec: 0.5 + i * beatSec, durSec: beatSec - 0.08, amplitude: 0.8 }));
+  midis.map((m, i) => ({ midi: m as Midi, onsetSec: 0.5 + i * beatSec, durSec: beatSec - 0.08, amplitude: 0.8, onset: 0.9 }));
 const detection = (notes: DetectedNote[], voicedFraction = 0.8): Detection => ({ notes, voicedFraction });
 const defaults: Options = { transpose: 0, key: 'auto', difficulty: 'melody', tempoOverride: null };
 const meta = { title: 'Tune', source: 'tune.wav' };
@@ -61,7 +61,7 @@ describe('buildScore', () => {
     expect(attempt(detection([], 0))).toThrow(TrowaError);
     expect(attempt(detection(detected([60, 64, 67]), 0.05))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
     expect(attempt(detection(detected(C_MAJOR_TUNE), 0.0))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
-    const scatteredBlips = C_MAJOR_TUNE.map((m, i) => ({ midi: m as Midi, onsetSec: i * 2, durSec: 0.1, amplitude: 0.4 }));
+    const scatteredBlips = C_MAJOR_TUNE.map((m, i) => ({ midi: m as Midi, onsetSec: i * 2, durSec: 0.1, amplitude: 0.4, onset: 0.9 }));
     expect(attempt(detection(scatteredBlips, 0.05))).toThrowError(expect.objectContaining({ kind: 'no_melody' }));
   });
 

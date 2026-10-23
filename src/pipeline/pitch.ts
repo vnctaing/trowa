@@ -4,6 +4,7 @@ import type { DetectedNote, Midi } from '../domain';
 import { throwIfAborted } from './abort';
 
 const CONFIDENT_FRAME = 0.5;
+const LOWEST_MIDI = 21;
 
 export type Detection = { notes: DetectedNote[]; voicedFraction: number };
 
@@ -29,15 +30,18 @@ export async function detectNotes(
   );
   throwIfAborted(signal);
 
-  const events = noteFramesToTime(outputToNotesPoly(frames, onsets));
+  const raw = outputToNotesPoly(frames, onsets);
+  const onsetPeak = (frame: number, midi: number) =>
+    Math.max(...[frame - 1, frame, frame + 1].map((f) => onsets[f]?.[midi - LOWEST_MIDI] ?? 0));
   const voiced = frames.filter((row) => Math.max(...row) >= CONFIDENT_FRAME).length;
   onProgress(1);
   return {
-    notes: events.map((e) => ({
+    notes: noteFramesToTime(raw).map((e, i) => ({
       midi: e.pitchMidi as Midi,
       onsetSec: e.startTimeSeconds,
       durSec: e.durationSeconds,
       amplitude: e.amplitude,
+      onset: onsetPeak(raw[i]!.startFrame, e.pitchMidi),
     })),
     voicedFraction: frames.length === 0 ? 0 : voiced / frames.length,
   };

@@ -173,7 +173,7 @@ export async function runPipeline(
         const notes: DetectedNote[] = score.notes.flatMap((n) =>
           n.midi === null
             ? []
-            : [{ midi: n.midi, onsetSec: n.startTick * spt, durSec: n.durTicks * spt, amplitude: 0.7 }],
+            : [{ midi: n.midi, onsetSec: n.startTick * spt, durSec: n.durTicks * spt, amplitude: 0.7, onset: 0.9 }],
         );
         onEvent({ type: 'notes', notes });
       }
