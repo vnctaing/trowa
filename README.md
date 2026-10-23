@@ -50,3 +50,5 @@ npx tsx scripts/readability.ts --summary
 npm test
 npm run typecheck
 ```
+
+`scripts/player-pitch-check.ts` checks the player's audio. Download the WAV with the Audio button and the score with the MusicXML button, then run `npx tsx scripts/player-pitch-check.ts song.wav song.musicxml`. It estimates the pitch in the middle of every note and exits non-zero unless each one matches the score.
