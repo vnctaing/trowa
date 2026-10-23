@@ -169,6 +169,16 @@ describe('applyDifficulty', () => {
     expect(out[0]!.durSec).toBeCloseTo(2.0);
   });
 
+  it("moves a short note an octave away from its neighbor into the longer note's octave in 'melody'", () => {
+    const flip = [n(71, 0, 0.7), n(83, 0.7, 0.25, 0.8, 0.9), n(71, 0.95, 0.25, 0.8, 0.9), n(83, 1.2, 3.0, 0.8, 0.9)];
+    expect(pitches(applyDifficulty(flip, 'melody', sixteenth))).toEqual([71, 83, 83]);
+  });
+
+  it("keeps an octave leap between two notes of a beat or longer in 'melody'", () => {
+    const leap = [n(60, 0, 1.2), n(72, 1.2, 1.2)];
+    expect(pitches(applyDifficulty(leap, 'melody', sixteenth))).toEqual([60, 72]);
+  });
+
   it("keeps same-pitch quarter notes as separate notes in 'melody'", () => {
     const repeated = [n(60, 0, 0.6), n(60, 0.6, 0.55), n(62, 1.2, 0.6)];
     expect(pitches(applyDifficulty(repeated, 'melody', sixteenth))).toEqual([60, 60, 62]);

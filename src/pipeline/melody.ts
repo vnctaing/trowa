@@ -1,4 +1,4 @@
-import { FLUTE_HIGH, FLUTE_LOW, type DetectedNote, type Midi, type Options } from '../domain';
+import { FLUTE_HIGH, FLUTE_LOW, TICKS_PER_QUARTER, type DetectedNote, type Midi, type Options } from '../domain';
 
 export type MelodyNote = DetectedNote & { ornament?: 'grace' };
 
@@ -154,7 +154,20 @@ const mergeFragments: Simplification = (line, sixteenthSec) => {
 
 const dropShortNotes: Simplification = (line, sixteenthSec) => line.filter((note) => !isShort(note, sixteenthSec));
 
-const MELODY: readonly Simplification[] = [dropShortNotes, mergeFragments];
+const alignOctaveFlips: Simplification = (line, sixteenthSec) => {
+  const out = line.map((x) => ({ ...x }));
+  out.forEach((note, i) => {
+    const prev = out[i - 1];
+    if (prev === undefined || Math.abs(note.midi - prev.midi) !== 12) return;
+    const beat = sixteenthSec * TICKS_PER_QUARTER;
+    if (note.onsetSec - (prev.onsetSec + prev.durSec) >= beat || Math.min(note.durSec, prev.durSec) >= beat) return;
+    if (note.durSec < prev.durSec) note.midi = prev.midi;
+    else prev.midi = note.midi;
+  });
+  return out;
+};
+
+const MELODY: readonly Simplification[] = [dropShortNotes, alignOctaveFlips, mergeFragments];
 
 function withGraceNotes(line: readonly DetectedNote[], sixteenthSec: number): MelodyNote[] {
   const out: MelodyNote[] = [];
