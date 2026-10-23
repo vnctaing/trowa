@@ -13,6 +13,7 @@ const MAX_BPM = 200;
 const PREFERRED_BPM = 110;
 const PHASE_LOCK_GAIN = 0.1;
 const TRIPLE_METER_MARGIN = 1.25;
+const METER_LEVEL_WEIGHTS = [1, 0.5, 0.25];
 
 export function sixteenthSec(bpm: number): number {
   return 60 / bpm / TICKS_PER_QUARTER;
@@ -52,7 +53,8 @@ export function estimateTempo(onsetsSec: readonly number[]): number {
     }
     const bpm = 60 / (lag * ENVELOPE_STEP_SEC);
     const prior = Math.exp(-0.5 * (Math.log2(bpm / PREFERRED_BPM) / 0.9) ** 2);
-    scores.push(autocorrelation(env, lag) * prior);
+    const periodicity = METER_LEVEL_WEIGHTS.reduce((sum, w, level) => sum + w * autocorrelation(env, lag * 2 ** level), 0);
+    scores.push(periodicity * prior);
   }
   let best = minLag;
   for (let lag = minLag; lag <= maxLag; lag++) if (scores[lag]! > scores[best]!) best = lag;

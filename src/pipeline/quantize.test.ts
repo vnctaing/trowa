@@ -36,6 +36,13 @@ describe('estimateTempo', () => {
     const onsets = beatsToNotes(TWINKLE_BEATS, 120).map((x, i) => x.onsetSec + (i % 2 ? 0.012 : -0.01));
     expect(Math.abs(estimateTempo(onsets) - 120)).toBeLessThan(2);
   });
+
+  it('holds 120 bpm when loose timing smears the beat lag', () => {
+    let seed = 7;
+    const jitter = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32 - 0.5) * 0.12;
+    const onsets = Array.from({ length: 24 }, (_, bar) => [0, 1, 2, 2.5, 3].map((b) => (bar * 4 + b) * 0.5 + jitter())).flat();
+    expect(Math.abs(estimateTempo(onsets) - 120)).toBeLessThan(1.5);
+  });
 });
 
 describe('quantize', () => {
