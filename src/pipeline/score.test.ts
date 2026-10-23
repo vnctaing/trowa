@@ -75,4 +75,12 @@ describe('buildScore', () => {
       [66, 2],
     ]);
   });
+
+  it('plays the melody sheet legato through a short gap but keeps the rest in ornaments', () => {
+    const detached = C_MAJOR_TUNE.map((m, i) => ({ midi: m as Midi, onsetSec: 0.5 + i * 0.6, durSec: 0.3, amplitude: 0.8, onset: 0.9 }));
+    const rests = (difficulty: Options['difficulty']) =>
+      buildScore(detection(detached), { ...defaults, difficulty, tempoOverride: 100 }, meta).notes.filter((x) => x.midi === null);
+    expect(rests('melody')).toEqual([]);
+    expect(rests('ornaments').length).toBeGreaterThan(0);
+  });
 });
