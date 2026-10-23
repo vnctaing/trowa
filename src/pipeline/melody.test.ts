@@ -98,6 +98,16 @@ describe('reduceToLine', () => {
     expect(pitches(line)).toEqual([78, 71, 76]);
   });
 
+  it('moves a note detected an octave away from the rest of its phrase back into the phrase', () => {
+    const line = reduceToLine([72, 74, 88, 76, 74].map((midi, i) => n(midi, i * 0.5, 0.5)), 0);
+    expect(pitches(line)).toEqual([72, 74, 76, 76, 74]);
+  });
+
+  it('keeps a phrase that climbs stepwise over more than an octave', () => {
+    const scale = [72, 74, 76, 77, 79, 81, 83, 84, 86, 88];
+    expect(pitches(reduceToLine(scale.map((midi, i) => n(midi, i * 0.5, 0.5)), 0))).toEqual(scale);
+  });
+
   it('keeps repeated notes that are separately articulated', () => {
     const line = reduceToLine([n(60, 0, 0.5), n(60, 0.6, 0.5)], 0);
     expect(pitches(line)).toEqual([60, 60]);

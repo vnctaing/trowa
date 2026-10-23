@@ -13,6 +13,8 @@ const DROPOUT_SIXTEENTHS = 4;
 const REVEALED_AFTER_SEC = 0.15;
 const REVEALED_MIN_SEC = 0.25;
 const SHORT_NOTE_FRACTION_OF_16TH = 0.75;
+const PHRASE_GAP_SEC = 0.5;
+const OCTAVE_OUTLIER_SEMITONES = 12;
 const REGISTER_QUANTILE = 0.75;
 const BELOW_REGISTER_SEMITONES = 19;
 
@@ -93,7 +95,7 @@ export function reduceToLine(detected: readonly DetectedNote[], transpose: numbe
     const covered = src !== undefined && src.onsetSec + src.durSec - f / FRAMES_PER_SEC > REVEALED_AFTER_SEC;
     if (src !== undefined && durSec >= (revealed || covered ? REVEALED_MIN_SEC : MIN_BLIP_SEC)) {
       line.push({
-        midi: foldIntoFlute(src.midi + transpose),
+        midi: (src.midi + transpose) as Midi,
         onsetSec: start / FRAMES_PER_SEC,
         durSec,
         amplitude: src.amplitude,
@@ -102,7 +104,33 @@ export function reduceToLine(detected: readonly DetectedNote[], transpose: numbe
     }
     start = f;
   }
-  return line;
+  return phrases(line).flatMap(pullOctaveOutliers);
+}
+
+function phrases(line: readonly DetectedNote[]): DetectedNote[][] {
+  const out: DetectedNote[][] = [];
+  line.forEach((note, i) => {
+    const prev = line[i - 1];
+    if (prev === undefined || note.onsetSec - (prev.onsetSec + prev.durSec) > PHRASE_GAP_SEC) out.push([]);
+    out.at(-1)!.push(note);
+  });
+  return out;
+}
+
+function weightedMedianMidi(notes: readonly DetectedNote[]): number {
+  const sorted = [...notes].sort((a, b) => a.midi - b.midi);
+  const half = sorted.reduce((sum, x) => sum + x.durSec, 0) / 2;
+  let seen = 0;
+  return (sorted.find((x) => (seen += x.durSec) >= half) ?? sorted.at(-1)!).midi;
+}
+
+function pullOctaveOutliers(phrase: readonly DetectedNote[]): DetectedNote[] {
+  const center = weightedMedianMidi(phrase);
+  return phrase.map((x) => {
+    const distance = x.midi - center;
+    const midi = Math.abs(distance) > OCTAVE_OUTLIER_SEMITONES ? x.midi - 12 * Math.round(distance / 12) : x.midi;
+    return { ...x, midi: foldIntoFlute(midi) };
+  });
 }
 
 type Simplification = (line: readonly DetectedNote[], sixteenthSec: number) => DetectedNote[];
