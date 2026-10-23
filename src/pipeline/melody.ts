@@ -17,6 +17,7 @@ const PHRASE_GAP_SEC = 0.5;
 const OCTAVE_OUTLIER_SEMITONES = 12;
 const REGISTER_QUANTILE = 0.75;
 const BELOW_REGISTER_SEMITONES = 19;
+const PITCH_WEIGHT = 0.03;
 
 export function foldIntoFlute(midi: number): Midi {
   let m = Math.round(midi);
@@ -26,7 +27,7 @@ export function foldIntoFlute(midi: number): Midi {
 }
 
 function salience(note: DetectedNote): number {
-  return note.amplitude + 0.1 * Math.min(note.durSec, 1) + 0.01 * note.midi;
+  return note.amplitude + 0.1 * Math.min(note.durSec, 1) + PITCH_WEIGHT * note.midi;
 }
 
 function absorbWeakerTails(notes: readonly DetectedNote[]): DetectedNote[] {

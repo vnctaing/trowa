@@ -38,6 +38,12 @@ describe('reduceToLine', () => {
     expect(pitches(line)).toEqual([72]);
   });
 
+  it('follows a quieter lead an octave above a louder accompaniment', () => {
+    const ostinato = [0, 0.25, 0.5, 0.75].map((t) => n(66, t, 0.2, 0.8));
+    const line = reduceToLine([...ostinato, n(81, 0, 1, 0.55)], 0);
+    expect(pitches(line)).toEqual([81]);
+  });
+
   it('never outputs overlapping notes', () => {
     const line = reduceToLine(
       [n(60, 0, 1), n(64, 0.5, 1, 0.9), n(67, 1.4, 0.5), n(62, 1.3, 0.2, 0.2)],
