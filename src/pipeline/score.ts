@@ -1,4 +1,4 @@
-import { TrowaError, type Options, type Score } from '../domain';
+import { TrowaError, type DetectedNote, type Options, type Score } from '../domain';
 import { estimateKeyFifths, majorTonicToFifths } from './key';
 import { applyDifficulty, foldIntoFlute, reduceToLine } from './melody';
 import type { Detection } from './pitch';
@@ -21,11 +21,14 @@ function densityPlausibility(notesPerSec: number): number {
   return 1;
 }
 
-export function buildScore(
-  detection: Detection,
-  options: Options,
-  meta: Pick<Score, 'title' | 'source'>,
-): Score {
+export type Timing = { tick: number; sec: number };
+export type Notated = { score: Score; line: DetectedNote[]; timing: Timing[] };
+
+export function buildScore(detection: Detection, options: Options, meta: Pick<Score, 'title' | 'source'>): Score {
+  return notate(detection, options, meta).score;
+}
+
+export function notate(detection: Detection, options: Options, meta: Pick<Score, 'title' | 'source'>): Notated {
   const line = reduceToLine(detection.notes, options.transpose);
   const first = line[0];
   const last = line.at(-1);
@@ -40,8 +43,12 @@ export function buildScore(
   if (confidence < MIN_CONFIDENCE) throw new TrowaError('no_melody');
 
   const bpm = options.tempoOverride ?? estimateTempo(line.map((x) => x.onsetSec));
-  const notes = quantize(applyDifficulty(line, options.difficulty, sixteenthSec(bpm)), bpm, NOTATION[options.difficulty]);
-  return {
+  const simplified = applyDifficulty(line, options.difficulty, sixteenthSec(bpm));
+  const notes = quantize(simplified, bpm, NOTATION[options.difficulty]);
+  const principal = simplified.filter((x) => x.ornament !== 'grace');
+  const placed = notes.filter((x) => x.midi !== null && x.ornament !== 'grace');
+  const timing = placed.map((x, i) => ({ tick: x.startTick, sec: principal[i]!.onsetSec }));
+  const score: Score = {
     ...meta,
     bpm,
     ...guessMeter(notes),
@@ -49,6 +56,7 @@ export function buildScore(
     notes,
     confidence: Math.round(confidence * 100) / 100,
   };
+  return { score, line, timing };
 }
 
 export function transposeScore(score: Score, semitones: number): Score {
