@@ -154,7 +154,7 @@ const mergeFragments: Simplification = (line, sixteenthSec) => {
 
 const dropShortNotes: Simplification = (line, sixteenthSec) => line.filter((note) => !isShort(note, sixteenthSec));
 
-const MELODY: readonly Simplification[] = [mergeFragments, dropShortNotes];
+const MELODY: readonly Simplification[] = [dropShortNotes, mergeFragments];
 
 function withGraceNotes(line: readonly DetectedNote[], sixteenthSec: number): MelodyNote[] {
   const out: MelodyNote[] = [];

@@ -162,6 +162,13 @@ describe('applyDifficulty', () => {
     expect(pitches(applyDifficulty(restruck, 'melody', sixteenth))).toEqual([71, 71]);
   });
 
+  it("turns a held note with a 40 ms semitone wobble into one note in 'melody'", () => {
+    const wobble = [n(76, 1.0, 1.0), n(77, 2.0, 0.04), n(76, 2.04, 0.96, 0.8, 0.5)];
+    const out = applyDifficulty(reduceToLine(wobble, 0), 'melody', sixteenth);
+    expect(out.map((x) => [x.midi, x.onsetSec])).toEqual([[76, 1.0]]);
+    expect(out[0]!.durSec).toBeCloseTo(2.0);
+  });
+
   it("keeps same-pitch quarter notes as separate notes in 'melody'", () => {
     const repeated = [n(60, 0, 0.6), n(60, 0.6, 0.55), n(62, 1.2, 0.6)];
     expect(pitches(applyDifficulty(repeated, 'melody', sixteenth))).toEqual([60, 60, 62]);
