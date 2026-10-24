@@ -2,6 +2,8 @@
 
 Turn a song into a printable flute sheet. Paste a YouTube link or drop an MP3/WAV, watch the particles translate it, then play back, transpose, and download the score as PDF or MusicXML.
 
+The name comes from Trowa Barton, the [Gundam Wing character](https://static0.cbrimages.com/wordpress/wp-content/uploads/2020/01/Quatre-Trowa-1.jpg?q=50&fit=crop&w=825&dpr=1.5) who made me want to play the flute as a kid.
+
 ![Uploading a WAV, the translation animation, and the resulting sheet](docs/media/demo.gif)
 
 The demo is a real run on a synthesized Ode to Joy with chords, bass and drums (`ode-band` from the benchmark). The Demucs separation was cached, so the whole run took 7 seconds. A cold run separates on CPU first and takes minutes.
