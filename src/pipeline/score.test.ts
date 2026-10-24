@@ -41,7 +41,7 @@ describe('transposeScore', () => {
 const C_MAJOR_TUNE = [60, 62, 64, 65, 67, 65, 64, 62, 60, 64, 67, 72, 67, 64, 60, 60];
 const detected = (midis: number[], beatSec = 0.6): DetectedNote[] =>
   midis.map((m, i) => ({ midi: m as Midi, onsetSec: 0.5 + i * beatSec, durSec: beatSec - 0.08, amplitude: 0.8, onset: 0.9 }));
-const detection = (notes: DetectedNote[], voicedFraction = 0.8): Detection => ({ notes, voicedFraction });
+const detection = (line: DetectedNote[], voicedFraction = 0.8): Detection => ({ notes: line, line, voicedFraction });
 const defaults: Options = { transpose: 0, key: 'auto', difficulty: 'melody', tempoOverride: null };
 const meta = { title: 'Tune', source: 'tune.wav' };
 

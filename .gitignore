@@ -3,3 +3,4 @@ dist
 .cache
 .proof
 .env
+scripts/reference/*.txt

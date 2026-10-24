@@ -1,12 +1,11 @@
 import { BasicPitch, noteFramesToTime, outputToNotesPoly } from '@spotify/basic-pitch';
 import type { GraphModel } from '@tensorflow/tfjs';
 import type { DetectedNote, Midi } from '../domain';
+import { frameToSec, LOWEST_MIDI, NOTE_BINS, trackLead, type Activations } from './track';
 
 const CONFIDENT_FRAME = 0.5;
-const LOWEST_MIDI = 21;
-const FRAME_SEC = 256 / 22050;
 
-export type Detection = { notes: DetectedNote[]; voicedFraction: number };
+export type Detection = { notes: DetectedNote[]; line: DetectedNote[]; voicedFraction: number };
 export type FoundNotes = (notes: DetectedNote[], throughSec: number) => void;
 
 function toDetected(events: ReturnType<typeof outputToNotesPoly>, onsets: number[][], frameOffset: number): DetectedNote[] {
@@ -20,6 +19,16 @@ function toDetected(events: ReturnType<typeof outputToNotesPoly>, onsets: number
     amplitude: e.amplitude,
     onset: onsetPeak(events[i]!.startFrame, e.pitchMidi),
   }));
+}
+
+function flatten(rows: number[][]): Float32Array {
+  const out = new Float32Array(rows.length * NOTE_BINS);
+  rows.forEach((row, i) => out.set(row, i * NOTE_BINS));
+  return out;
+}
+
+function activationsOf(frames: number[][], onsets: number[][]): Activations {
+  return { frameCount: frames.length, frames: flatten(frames), onsets: flatten(onsets) };
 }
 
 export async function detectNotes(
@@ -37,13 +46,14 @@ export async function detectNotes(
       const offset = frames.length;
       frames.push(...f);
       onsets.push(...o);
-      onFound(toDetected(outputToNotesPoly(f, o), o, offset), frames.length * FRAME_SEC);
+      onFound(toDetected(outputToNotesPoly(f, o), o, offset), frameToSec(frames.length));
     },
     onProgress,
   );
 
   const voiced = frames.filter((row) => Math.max(...row) >= CONFIDENT_FRAME).length;
   const notes = toDetected(outputToNotesPoly(frames, onsets), onsets, 0);
+  const line = trackLead(activationsOf(frames, onsets));
   onProgress(1);
-  return { notes, voicedFraction: frames.length === 0 ? 0 : voiced / frames.length };
+  return { notes, line, voicedFraction: frames.length === 0 ? 0 : voiced / frames.length };
 }

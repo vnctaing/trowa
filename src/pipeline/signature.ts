@@ -6,6 +6,8 @@ const SLOWEST_BPM = 60;
 const FASTEST_BPM = 180;
 const LIKELY_BPM = 115;
 const BRIGHT_CROSSINGS_PER_SEC = 4000;
+const AUDIBLE_SHARE = 0.25;
+const MIN_AUDIBLE_FRACTION = 1 / 3;
 
 function sliceBounds(length: number, k: number): [number, number] {
   return [Math.floor((k * length) / SIGNATURE_SLICES), Math.floor(((k + 1) * length) / SIGNATURE_SLICES)];
@@ -65,4 +67,9 @@ export function leadShare(mix: Float32Array, lead: Float32Array): Float32Array {
     share[k] = whole > 1e-4 ? Math.min(1, rms(lead, from, Math.min(to, lead.length)) / whole) : 0;
   }
   return share;
+}
+
+export function stemCarriesLead(share: Float32Array): boolean {
+  const audible = share.filter((v) => v >= AUDIBLE_SHARE).length;
+  return audible >= share.length * MIN_AUDIBLE_FRACTION;
 }

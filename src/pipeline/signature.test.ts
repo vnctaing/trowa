@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIGNATURE_SLICES } from '../domain';
-import { leadShare, trackSignature } from './signature';
+import { leadShare, stemCarriesLead, trackSignature } from './signature';
 
 const RATE = 22050;
 
@@ -50,5 +50,17 @@ describe('leadShare', () => {
 
   it('is zero where the mix is silent', () => {
     expect(leadShare(new Float32Array(RATE), new Float32Array(RATE)).every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('stemCarriesLead', () => {
+  it('rejects a vocal stem that stays near silent under an instrumental mix', () => {
+    const mix = tone(440, 8);
+    expect(stemCarriesLead(leadShare(mix, tone(440, 8, () => 0.02)))).toBe(false);
+  });
+
+  it('accepts a vocal stem that carries the mix after an instrumental intro', () => {
+    const mix = tone(440, 8);
+    expect(stemCarriesLead(leadShare(mix, tone(440, 8, (t) => (t < 2 ? 0 : 0.35))))).toBe(true);
   });
 });

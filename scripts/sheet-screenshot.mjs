@@ -20,6 +20,8 @@ const translate = await page.waitForSelector('.input-screen button.btn-primary',
 await translate.click();
 await page.waitForSelector('.result-screen .score-viewport:not(.is-rendering)', { timeout: 30 * 60_000 });
 await new Promise((resolve) => setTimeout(resolve, Number(process.env.SETTLE_MS ?? 6000)));
+const paperHeight = await page.evaluate(() => document.querySelector('.paper')?.scrollHeight ?? 0);
+await page.setViewport({ width: 1100, height: paperHeight + 400, deviceScaleFactor: 1 });
 const paper = await page.$('.paper');
 await paper.screenshot({ path: out });
 const summary = await page.evaluate(() => ({

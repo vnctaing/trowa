@@ -72,10 +72,60 @@ function decompose(posInBar: number, length: number, meter: Meter, sounding: boo
   return pieces;
 }
 
+type Beam = 'begin' | 'continue' | 'end' | 'forward hook' | 'backward hook';
+
 type Piece =
-  | { kind: 'sound'; midi: Midi; ticks: number; tieStart: boolean; tieStop: boolean }
+  | { kind: 'sound'; midi: Midi; ticks: number; tieStart: boolean; tieStop: boolean; beams: Beam[] }
   | { kind: 'rest'; ticks: number }
   | { kind: 'grace'; midi: Midi };
+
+const EIGHTH_TICKS = TICKS_PER_QUARTER / 2;
+const SIXTEENTH_TICKS = TICKS_PER_QUARTER / 4;
+
+type Sound = Extract<Piece, { kind: 'sound' }>;
+type BeamGroup = { beat: number; notes: Sound[] };
+
+function beamGroups(pieces: readonly Piece[], { barTicks, beatTicks }: Meter): Sound[][] {
+  const groups: BeamGroup[] = [];
+  let open = null as BeamGroup | null;
+  let pos = 0;
+  for (const piece of pieces) {
+    const beat = Math.floor(pos / beatTicks);
+    const beamable = piece.kind === 'sound' && piece.ticks < TICKS_PER_QUARTER;
+    if (!beamable || open?.beat !== beat) {
+      if (open) groups.push(open);
+      open = null;
+    }
+    if (piece.kind === 'sound' && beamable) (open ??= { beat, notes: [] }).notes.push(piece);
+    pos += piece.kind === 'grace' ? 0 : piece.ticks;
+  }
+  if (open) groups.push(open);
+
+  const plainEighths = (g: BeamGroup) => g.notes.length === 2 && g.notes.every((n) => n.ticks === EIGHTH_TICKS);
+  const merged: Sound[][] = [];
+  for (let k = 0; k < groups.length; k++) {
+    const g = groups[k]!;
+    const next = groups[k + 1];
+    const halfBar = barTicks === 4 * beatTicks && g.beat % 2 === 0;
+    if (halfBar && next && next.beat === g.beat + 1 && plainEighths(g) && plainEighths(next)) {
+      merged.push([...g.notes, ...next.notes]);
+      k++;
+    } else merged.push(g.notes);
+  }
+  return merged.filter((g) => g.length >= 2);
+}
+
+function assignBeams(pieces: readonly Piece[], meter: Meter): void {
+  for (const group of beamGroups(pieces, meter)) {
+    group.forEach((note, k) => {
+      note.beams.push(k === 0 ? 'begin' : k === group.length - 1 ? 'end' : 'continue');
+      if (note.ticks !== SIXTEENTH_TICKS) return;
+      const before = group[k - 1]?.ticks === SIXTEENTH_TICKS;
+      const after = group[k + 1]?.ticks === SIXTEENTH_TICKS;
+      note.beams.push(before && after ? 'continue' : after ? 'begin' : before ? 'end' : k === 0 ? 'forward hook' : 'backward hook');
+    });
+  }
+}
 
 function layoutMeasures(notes: readonly QuantizedNote[], meter: Meter): Piece[][] {
   const { barTicks } = meter;
@@ -97,7 +147,7 @@ function layoutMeasures(notes: readonly QuantizedNote[], meter: Meter): Piece[][
       bars[bar]!.push(
         midi === null
           ? { kind: 'rest', ticks }
-          : { kind: 'sound', midi, ticks, tieStart: i < pieces.length - 1, tieStop: i > 0 },
+          : { kind: 'sound', midi, ticks, tieStart: i < pieces.length - 1, tieStop: i > 0, beams: [] },
       );
     });
   };
@@ -116,6 +166,7 @@ function layoutMeasures(notes: readonly QuantizedNote[], meter: Meter): Piece[][
     cursor = note.startTick + note.durTicks;
   }
   if (cursor < barCount * barTicks) place(cursor, barCount * barTicks - cursor, null);
+  for (const bar of bars) assignBeams(bar, meter);
   return bars;
 }
 
@@ -141,7 +192,8 @@ function noteXml(piece: Piece, keyFifths: number, state: AccidentalState, barTic
   const ties = [piece.tieStop && 'stop', piece.tieStart && 'start'].filter((t): t is string => Boolean(t));
   const tieXml = ties.map((t) => `<tie type="${t}"/>`).join('');
   const tiedXml = ties.length ? `<notations>${ties.map((t) => `<tied type="${t}"/>`).join('')}</notations>` : '';
-  return `<note>${pitch}<duration>${piece.ticks}</duration>${tieXml}<voice>1</voice><type>${v.type}</type>${'<dot/>'.repeat(v.dots)}${accidental}${tiedXml}</note>`;
+  const beamXml = piece.beams.map((b, level) => `<beam number="${level + 1}">${b}</beam>`).join('');
+  return `<note>${pitch}<duration>${piece.ticks}</duration>${tieXml}<voice>1</voice><type>${v.type}</type>${'<dot/>'.repeat(v.dots)}${accidental}${beamXml}${tiedXml}</note>`;
 }
 
 export function toMusicXml(score: Score): string {
@@ -162,7 +214,7 @@ export function toMusicXml(score: Score): string {
     const attributes =
       i === 0
         ? `<attributes><divisions>${TICKS_PER_QUARTER}</divisions><key><fifths>${score.keyFifths}</fifths><mode>major</mode></key><time><beats>${score.beatsPerBar}</beats><beat-type>${score.beatUnit}</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
-      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${bpm}</per-minute></metronome></direction-type><sound tempo="${bpm}"/></direction>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${bpm}</per-minute></metronome></direction-type><sound tempo="${score.bpm}"/></direction>
       `
         : '';
     const barline = i === bars.length - 1 ? '\n      <barline location="right"><bar-style>light-heavy</bar-style></barline>' : '';

@@ -24,11 +24,15 @@ mutate() {
 }
 
 mutate src/pipeline/melody.ts 'while (m < FLUTE_LOW) m += 12;' '' src/pipeline/melody.test.ts
-mutate src/pipeline/melody.ts '0.01 * note.midi' '0' src/pipeline/melody.test.ts
-mutate src/pipeline/melody.ts 'if (s > best[f]!)' 'if (s < best[f]! || best[f]! === -Infinity)' src/pipeline/melody.test.ts
-mutate src/pipeline/melody.ts 'if (isTail) {' 'if (false) {' src/pipeline/melody.test.ts
-mutate src/pipeline/melody.ts '(revealed ? REVEALED_MIN_SEC : MIN_BLIP_SEC)' 'MIN_BLIP_SEC' src/pipeline/melody.test.ts
 mutate src/pipeline/melody.ts 'if (leadsIntoNext) out.push' 'if (false) out.push' src/pipeline/melody.test.ts
+mutate src/pipeline/melody.ts 'Math.abs(distance) >= OCTAVE_OUTLIER_SEMITONES ?' 'false ?' src/pipeline/melody.test.ts
+mutate src/pipeline/track.ts 'const HEIGHT_PER_OCTAVE = 0.6;' 'const HEIGHT_PER_OCTAVE = 0;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'const REGISTER_COST = 3;' 'const REGISTER_COST = 0;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'const CHANGE_COST = 3;' 'const CHANGE_COST = 0;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'emission[UNVOICED] = Math.log(VOICED_THRESHOLD);' 'emission[UNVOICED] = -99;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'const ONSET_RISE = 0.3;' 'const ONSET_RISE = 0;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'if (same && !rearticulated) continue;' 'if (same) continue;' src/pipeline/track.test.ts
+mutate src/pipeline/track.ts 'WINDOW_OFFSET_SEC * Math.floor(frame / WINDOW_FRAMES)' '0' src/pipeline/track.test.ts
 mutate src/pipeline/key.ts 'bestMajorTonic = (tonic + 3) % 12;' 'bestMajorTonic = tonic;' src/pipeline/key.test.ts
 mutate src/pipeline/key.ts 'const v = (((pitchClass * 7) % 12) + 12) % 12;' 'const v = pitchClass % 12;' src/pipeline/key.test.ts
 mutate src/pipeline/quantize.ts '      end = articulationTarget;' '' src/pipeline/quantize.test.ts

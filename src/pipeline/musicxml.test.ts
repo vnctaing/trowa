@@ -39,6 +39,7 @@ type Rendered = {
   ties: string[];
   grace: boolean;
   accidental: string | null;
+  beams: string[];
 };
 
 function measures(xml: string): Rendered[][] {
@@ -54,6 +55,7 @@ function measures(xml: string): Rendered[][] {
       ties: children(n, 'tie').map((t) => t.getAttribute('type') ?? ''),
       grace: children(n, 'grace').length > 0,
       accidental: text(n, 'accidental'),
+      beams: children(n, 'beam').map((b) => `${b.getAttribute('number')}:${b.textContent}`),
     })),
   );
 }
@@ -124,6 +126,7 @@ describe('toMusicXml', () => {
     expect([text(root, 'beats'), text(root, 'beat-type')]).toEqual(['3', '4']);
     expect([text(root, 'sign'), text(root, 'line')]).toEqual(['G', '2']);
     expect(text(root, 'per-minute')).toBe('88');
+    expect(root.getElementsByTagName('sound')[0]?.getAttribute('tempo')).toBe('87.6');
   });
 
   it('spells black keys with sharps in sharp keys and flats in flat keys', () => {
@@ -164,6 +167,77 @@ describe('toMusicXml', () => {
       [null, 4],
       ['D4', 0],
       ['E4', 8],
+    ]);
+  });
+
+  it('beams a half bar of plain eighths as one group of four in 4/4', () => {
+    const ms = measures(toMusicXml(score(Array.from({ length: 8 }, (_, i) => note(60 + i, i * 2, 2)))));
+    expect(ms[0]!.map((x) => x.beams)).toEqual([
+      ['1:begin'], ['1:continue'], ['1:continue'], ['1:end'],
+      ['1:begin'], ['1:continue'], ['1:continue'], ['1:end'],
+    ]);
+  });
+
+  it('beams eighths in pairs per beat when the half bar is not all eighths', () => {
+    const ms = measures(toMusicXml(score([note(60, 0, 2), note(62, 2, 2), note(64, 4, 4), note(65, 8, 2), note(67, 10, 2), note(69, 12, 4)])));
+    expect(ms[0]!.map((x) => x.beams)).toEqual([['1:begin'], ['1:end'], [], ['1:begin'], ['1:end'], []]);
+  });
+
+  it('does not beam across a rest or across a beat', () => {
+    const ms = measures(toMusicXml(score([note(60, 0, 2), note(null, 2, 2), note(62, 4, 2), note(64, 6, 2), note(65, 8, 2), note(67, 10, 6)])));
+    expect(ms[0]!.map((x) => [x.pitch, x.beams])).toEqual([
+      ['C4', []],
+      [null, []],
+      ['D4', ['1:begin']],
+      ['E4', ['1:end']],
+      ['F4', []],
+      ['G4', []],
+    ]);
+  });
+
+  it('never beams quarters or longer, even when they share a beat with an eighth', () => {
+    const ms = measures(
+      toMusicXml(
+        score([
+          note(60, 0, 2), note(62, 2, 4), note(64, 6, 2), note(65, 8, 8),
+          note(67, 16, 2), note(69, 18, 2), note(71, 20, 4), note(72, 24, 8),
+          note(74, 32, 16),
+        ]),
+      ),
+    );
+    expect(ms.slice(0, 3).map((m) => m.map((x) => [x.type, x.beams]))).toEqual([
+      [['eighth', []], ['quarter', []], ['eighth', []], ['half', []]],
+      [['eighth', ['1:begin']], ['eighth', ['1:end']], ['quarter', []], ['half', []]],
+      [['whole', []]],
+    ]);
+  });
+
+  it('beams 6/8 eighths in groups of three per dotted quarter', () => {
+    const ms = measures(toMusicXml(score(Array.from({ length: 6 }, (_, i) => note(60 + i, i * 2, 2)), { beatsPerBar: 6, beatUnit: 8 })));
+    expect(ms[0]!.map((x) => x.beams)).toEqual([['1:begin'], ['1:continue'], ['1:end'], ['1:begin'], ['1:continue'], ['1:end']]);
+  });
+
+  it('adds a second beam for sixteenths and a hook for a lone sixteenth', () => {
+    const run = measures(toMusicXml(score([note(60, 0, 1), note(62, 1, 1), note(64, 2, 1), note(65, 3, 1), note(67, 4, 12)])));
+    expect(run[0]!.slice(0, 4).map((x) => x.beams)).toEqual([
+      ['1:begin', '2:begin'],
+      ['1:continue', '2:continue'],
+      ['1:continue', '2:continue'],
+      ['1:end', '2:end'],
+    ]);
+    const dotted = measures(toMusicXml(score([note(60, 0, 3), note(62, 3, 1), note(64, 4, 12)])));
+    expect(dotted[0]!.slice(0, 2).map((x) => [x.type, x.dots, x.beams])).toEqual([
+      ['eighth', 1, ['1:begin']],
+      ['16th', 0, ['1:end', '2:backward hook']],
+    ]);
+  });
+
+  it('keeps a tied note inside its beam group', () => {
+    const ms = measures(toMusicXml(score([note(60, 0, 2), note(62, 2, 3), note(null, 5, 11)])));
+    expect(ms[0]!.slice(0, 3).map((x) => [x.pitch, x.type, x.ties, x.beams])).toEqual([
+      ['C4', 'eighth', [], ['1:begin']],
+      ['D4', 'eighth', ['start'], ['1:end']],
+      ['D4', '16th', ['stop'], []],
     ]);
   });
 

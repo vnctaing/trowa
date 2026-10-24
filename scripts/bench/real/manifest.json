@@ -1,0 +1,97 @@
+[
+  {
+    "slug": "bach-1013-allemande",
+    "tier": 1,
+    "title": "Partita in A minor for solo flute, BWV 1013: I. Allemande",
+    "composer": "Johann Sebastian Bach",
+    "melodyPart": "track 0 (only track, solo flute)",
+    "audio": {
+      "url": "https://commons.wikimedia.org/wiki/File:Bach_-_Partita_For_Solo_Flute_-_Modern_Flute_-_1._Allemande.ogg",
+      "license": "CC BY-SA 2.0 (Wikimedia Commons; source states EFF Open Audio License)",
+      "performer": "Scott Goff (flute)",
+      "file": "source.ogg"
+    },
+    "score": {
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV1013/bwv1013/bwv1013-mids.zip#bwv1013.mid",
+      "license": "Public Domain (Mutopia Project)",
+      "file": "score.mid",
+      "format": "midi"
+    }
+  },
+  {
+    "slug": "bach-1013-sarabande",
+    "tier": 1,
+    "title": "Partita in A minor for solo flute, BWV 1013: III. Sarabande",
+    "composer": "Johann Sebastian Bach",
+    "melodyPart": "track 0 (only track, solo flute)",
+    "audio": {
+      "url": "https://commons.wikimedia.org/wiki/File:Bach_-_Partita_For_Solo_Flute_-_Modern_Flute_-_3._Sarabande.ogg",
+      "license": "CC BY-SA 2.0 (Wikimedia Commons; source states EFF Open Audio License)",
+      "performer": "Scott Goff (flute)",
+      "file": "source.ogg"
+    },
+    "score": {
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV1013/bwv1013/bwv1013-mids.zip#bwv1013-2.mid",
+      "license": "Public Domain (Mutopia Project)",
+      "file": "score.mid",
+      "format": "midi"
+    }
+  },
+  {
+    "slug": "bach-1030-largo",
+    "tier": 2,
+    "title": "Flute Sonata in B minor, BWV 1030: II. Largo e dolce",
+    "composer": "Johann Sebastian Bach",
+    "melodyPart": "track 0 (flute); accompaniment is keyboard lute (lute-harpsichord), not piano",
+    "audio": {
+      "url": "https://commons.wikimedia.org/wiki/File:Bach_Flute_Sonata_Bmin_2._Largo_e_Dolce.ogg",
+      "license": "CC BY-SA 2.0 (Wikimedia Commons; source states EFF Open Audio License)",
+      "performer": "Felix Skowronek (flute), Martha Goldstein (keyboard lute)",
+      "file": "source.ogg"
+    },
+    "score": {
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV1030/bwv1030/bwv1030-mids.zip#score-1.mid",
+      "license": "Public Domain (Mutopia Project, piece-info id 645)",
+      "file": "score.mid",
+      "format": "midi"
+    }
+  },
+  {
+    "slug": "mozart-k525-romanze",
+    "tier": 3,
+    "title": "Eine kleine Nachtmusik, K. 525: II. Romanze",
+    "composer": "Wolfgang Amadeus Mozart",
+    "melodyPart": "track 0 (Violin I)",
+    "audio": {
+      "url": "https://commons.wikimedia.org/wiki/File:Mozart_-_Serenade_No._13_for_strings_in_G_major,_K._525_-_Romanze.ogg",
+      "license": "Public domain (PD-US, Musopen via Wikimedia Commons)",
+      "performer": "Musopen (ensemble not named on the file page)",
+      "file": "source.ogg"
+    },
+    "score": {
+      "url": "https://www.mutopiaproject.org/ftp/MozartWA/KV525/MozartWA-KV525/MozartWA-KV525-mids.zip#MozartWA-KV525-mov-02.mid",
+      "license": "Public Domain (Mutopia Project, piece-info id 2230)",
+      "file": "score.mid",
+      "format": "midi"
+    }
+  },
+  {
+    "slug": "fur-elise",
+    "tier": 3,
+    "title": "Bagatelle in A minor, WoO 59 \"Für Elise\"",
+    "composer": "Ludwig van Beethoven",
+    "melodyPart": "track 0 (\"up\", right hand, upper voice)",
+    "audio": {
+      "url": "https://commons.wikimedia.org/wiki/File:FurElise.ogg",
+      "license": "Public domain (PD-self and CC0, Wikimedia Commons)",
+      "performer": "Gaodifan (V Gao), piano",
+      "file": "source.ogg"
+    },
+    "score": {
+      "url": "https://www.mutopiaproject.org/ftp/BeethovenLv/WoO59/fur_Elise_WoO59/fur_Elise_WoO59.mid",
+      "license": "Public Domain (Mutopia Project, piece-info id 931)",
+      "file": "score.mid",
+      "format": "midi"
+    }
+  }
+]
