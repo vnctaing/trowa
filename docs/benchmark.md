@@ -1,30 +1,80 @@
-# Benchmark
+# How good is it?
 
-`scripts/bench/` measures the melody line against exact ground truth. `synth.ts` renders eight public-domain tunes three ways (lead alone, with chords, bass and drums, and with a louder piano figure an octave below the lead) and writes the truth beside each WAV. `dump.ts` runs Basic Pitch once per track and caches the activations under `.cache/activations/`. `run.ts` replays the notation stages on the cached activations and prints, per track, precision and recall of the pitch over time, the share of wrong, octave and in-rest notes, onset hits, tempo ratio, notes per bar and whether the score is exact. The headline is F0.5, which weights precision twice as much as recall. `--approach baseline` runs the old salience reducer kept in `legacy-salience.ts` for comparison.
+To know whether a change makes Trowa better, we need songs where we already know the right melody. We feed each one to Trowa and compare its sheet with the real tune, note by note.
 
-```sh
-npx tsx scripts/bench/synth.ts
-for f in .cache/bench/*.wav; do n=$(basename "$f" .wav); npx tsx scripts/bench/dump.ts "$n" "$f" --filter; done
-npx tsx scripts/bench/run.ts --approach tracker
+```mermaid
+flowchart LR
+  A["🎵 Recording"] --> T["Trowa"] --> S["Trowa's melody"]
+  K["📜 Known melody"] --> C{"Compare"}
+  S --> C
+  C --> R["Score 0 to 1"]
 ```
 
-`inspect.ts <track> --from <sec> --to <sec>` prints the truth, the tracked line and the score side by side for one window.
+## The score
 
-`real.ts` scores real recordings in three tiers (flute alone, flute with accompaniment, melody on another instrument). `scripts/bench/real/manifest.json` lists each recording and score with its source URL and license; `python3 scripts/bench/real/fetch.py` downloads them into `.cache/real/<slug>/` as `mix.wav` and `score.mid`; they are not committed. The melody track of the MIDI is aligned to the recording by DTW over Basic Pitch's pitch-class activations, and the report shows the alignment fit next to the scores. Run it with `npx tsx scripts/bench/real.ts`.
+Trowa can be wrong in two ways. It can **write a wrong note**, or it can **miss a note**. A wrong note is worse for a flute player, because you play it and it sounds bad. A missed note is just a short rest. So the score, called F0.5, counts wrong notes twice as heavily as missed ones. 1.0 is perfect.
+
+## The test songs
+
+There are two kinds of songs, and they are used differently.
+
+```mermaid
+flowchart TB
+  subgraph tune ["Practice songs (used to tune Trowa)"]
+    S1["Synthesized tunes<br/>8 public-domain melodies, 3 versions each"]
+    S2["Naruto, Sadness and Sorrow<br/>first 32 bars"]
+  end
+  subgraph test ["Exam songs (never used for tuning)"]
+    E1["Level 1: flute alone<br/>2 Bach recordings"]
+    E2["Level 2: flute with keyboard<br/>1 Bach recording"]
+    E3["Level 3: melody on another instrument<br/>Mozart and Für Elise"]
+  end
+```
+
+**Practice songs** are where we tried settings until the results looked good. Scores on them are flattering, like grading a student on the homework they already corrected. The synthesized tunes come in three versions: the melody alone, with a band, and with a louder piano an octave below.
+
+**Exam songs** are real performances Trowa never saw while being tuned. Only these scores tell you how it does on a new song. Each exam song is freely licensed (Creative Commons or public domain), with a public-domain score from the Mutopia Project.
 
 ## Results
 
-The synthetic set and Naruto are tuning data. The tracker's parameters were swept on both, and the register pass was added for Naruto bars 10-11. Their gains are in-sample. Only the real recordings are held out. On those, the Viterbi tracker scores against main (757dd7b; its pipeline is unchanged since the fork point 83c02d1) as follows. Tier F0.5 is F0.5 of the mean precision and recall.
+Exam songs, before and after the new melody tracker:
 
-| tier | recordings | main F0.5 | tracker F0.5 |
+| Level | Songs | Before | After |
 | --- | --- | --- | --- |
-| 1, flute alone | 2 | 0.633 | 0.728 |
-| 2, flute with accompaniment | 1 | 0.776 | 0.832 |
-| 3, melody on another instrument | 2 | 0.484 | 0.630 |
+| 1, flute alone | 2 | 0.63 | 0.73 |
+| 2, flute with keyboard | 1 | 0.78 | 0.83 |
+| 3, melody on another instrument | 2 | 0.48 | 0.63 |
 
-With one or two recordings per tier, these are five data points, not tier estimates.
+The tracker won on all five songs. Five songs is still a small sample. Read these as five data points, not a grade for each level.
 
-The held-out data does not clearly support the register pass. Without it, tier 1 rises from 0.728 to 0.754 (both flute solos improve), tier 2 falls from 0.832 to 0.823, and tier 3 falls from 0.630 to 0.591. The whole tier 3 drop comes from the Romanze; Für Elise improves. The pass stays in until the model bakeoff.
+On Naruto, a practice song, the score went from 0.39 to 0.64. Bars 12 to 15 still come out wrong.
 
-On the tuning data, Naruto bars 1-32 go from 0.623 to 0.642 against the old salience reducer, and from 0.386 to 0.642 against main. Bars 12-15 fail. The reference marks them sure, and the tracker scores 0 precision in each of them (`npx tsx scripts/bench/bars.ts` prints the per-bar scores).
+**One setting is doubtful.** The "stay in your range" rule (step 3 in [pipeline.md](pipeline.md)) was added for Naruto. On the exam songs it helps two and hurts three, including both flute solos. It stays in until we compare Trowa against ready-made AI transcription models.
 
+## How the known melody is lined up
+
+A performer never plays exactly in time with the score. Before comparing, the score is stretched and squeezed in time to follow the recording, a technique called dynamic time warping. The report shows how well that lineup fit, so a bad lineup isn't mistaken for a bad transcription.
+
+## Run it yourself
+
+The audio isn't in the repo. The scripts download or generate it into `.cache/`.
+
+```sh
+# Practice songs: make the synthesized tunes, run the note model once, score them
+npx tsx scripts/bench/synth.ts
+for f in .cache/bench/*.wav; do n=$(basename "$f" .wav); npx tsx scripts/bench/dump.ts "$n" "$f" --filter; done
+npx tsx scripts/bench/run.ts --approach tracker
+
+# Exam songs: download them, then score
+python3 scripts/bench/real/fetch.py
+npx tsx scripts/bench/real.ts
+```
+
+| Script | What it does |
+| --- | --- |
+| `synth.ts` | Makes the synthesized tunes and saves the right answer next to each. |
+| `dump.ts` | Runs the note-guessing model once per song and caches the result, so scoring is fast. |
+| `run.ts` | Scores the practice songs. `--approach baseline` scores the old method for comparison. |
+| `real.ts` | Scores the exam songs. `real/manifest.json` lists each song's source and license. |
+| `inspect.ts <song> --from <sec> --to <sec>` | Shows the right answer, Trowa's line and the sheet side by side for a few seconds. |
+| `bars.ts` | Scores Naruto bar by bar. |
