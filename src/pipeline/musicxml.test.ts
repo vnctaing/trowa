@@ -195,6 +195,23 @@ describe('toMusicXml', () => {
     ]);
   });
 
+  it('never beams quarters or longer, even when they share a beat with an eighth', () => {
+    const ms = measures(
+      toMusicXml(
+        score([
+          note(60, 0, 2), note(62, 2, 4), note(64, 6, 2), note(65, 8, 8),
+          note(67, 16, 2), note(69, 18, 2), note(71, 20, 4), note(72, 24, 8),
+          note(74, 32, 16),
+        ]),
+      ),
+    );
+    expect(ms.slice(0, 3).map((m) => m.map((x) => [x.type, x.beams]))).toEqual([
+      [['eighth', []], ['quarter', []], ['eighth', []], ['half', []]],
+      [['eighth', ['1:begin']], ['eighth', ['1:end']], ['quarter', []], ['half', []]],
+      [['whole', []]],
+    ]);
+  });
+
   it('beams 6/8 eighths in groups of three per dotted quarter', () => {
     const ms = measures(toMusicXml(score(Array.from({ length: 6 }, (_, i) => note(60 + i, i * 2, 2)), { beatsPerBar: 6, beatUnit: 8 })));
     expect(ms[0]!.map((x) => x.beams)).toEqual([['1:begin'], ['1:continue'], ['1:end'], ['1:begin'], ['1:continue'], ['1:end']]);
