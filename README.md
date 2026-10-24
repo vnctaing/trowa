@@ -21,12 +21,15 @@ Open `http://localhost:5310/`. Add `?fake` to drive the UI with a canned score a
 
 ## How it works
 
-1. The server fetches YouTube audio with `yt-dlp`. Uploads decode in the browser.
-2. Demucs splits off the lead stem. If the stem is near-silent or Demucs is missing, a band-pass filter stands in.
-3. Spotify's Basic Pitch detects pitches in the browser, and a Viterbi tracker follows the lead line through them.
-4. The line is quantized, beamed and written as MusicXML, rendered with OpenSheetMusicDisplay and exported with jsPDF.
+1. **Get the audio.** For a YouTube link, the server downloads the sound with `yt-dlp`. An uploaded MP3 or WAV is read in the browser.
+2. **Isolate the lead.** Demucs, a source-separation model, pulls the singer or lead instrument away from the backing band. If Demucs is missing or returns near silence, a filter that keeps the middle frequencies takes over.
+3. **Hear the notes.** Spotify's Basic Pitch runs in the browser. It estimates, many times a second, how likely each pitch is to be sounding.
+4. **Follow the melody.** Those estimates are noisy, with chords, echoes and stray notes mixed in. A Viterbi tracker picks the single line that is most consistent over time. It favors held notes and small steps and avoids jumping around. It can also choose silence, so a passage that a flute can't play becomes a rest instead of wrong notes.
+5. **Write the sheet.** The app detects the tempo, lines the notes up on a beat grid, finds the key, moves notes into flute range, and groups eighth notes. The result is MusicXML. OpenSheetMusicDisplay draws it, jsPDF exports it, the player plays it back, and Transpose shifts it to another key.
 
-Full mixes still miss or add notes, and tempo on rubato tracks can be off by a few percent. [docs/pipeline.md](docs/pipeline.md) explains each stage and its limits, and [docs/benchmark.md](docs/benchmark.md) has the benchmark and held-out results.
+The translation animation runs while a background worker does the analysis, so the page doesn't freeze.
+
+On five held-out recordings of real performances, the tracker scores an F0.5 of 0.73 on solo flute, 0.83 on flute with accompaniment, and 0.63 when another instrument carries the melody. F0.5 weights precision (no wrong notes) twice as heavily as recall (no missed notes). Tempo on rubato tracks can be off by a few percent. [docs/pipeline.md](docs/pipeline.md) explains each stage and its limits, and [docs/benchmark.md](docs/benchmark.md) has the full benchmark.
 
 ## Test
 
