@@ -104,7 +104,10 @@ async function youtubeAudio(videoId) {
       ['--no-update', '--no-playlist', '-f', 'bestaudio/best', '-o', join(work, 'source.%(ext)s'), `https://www.youtube.com/watch?v=${videoId}`],
       { timeoutMs: 600_000 },
     );
-    if (!dl.ok) throw trowaError(classifyYtDlpFailure(dl.stderr));
+    if (!dl.ok) {
+      console.error(`[yt-dlp] ${videoId}: ${dl.stderr.trim().split('\n').slice(-3).join(' | ')}`);
+      throw trowaError(classifyYtDlpFailure(dl.stderr));
+    }
     const tmp = join(work, 'audio.wav');
     const source = (await readdir(work)).find((f) => f.startsWith('source.'));
     if (!source) throw trowaError('network');
