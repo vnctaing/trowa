@@ -8,6 +8,7 @@ export class TrackListener {
   private readonly bins: Uint8Array<ArrayBuffer>;
   private readonly spectrum: Spectrum = { bands: new Float32Array(BANDS) };
   private source: AudioBufferSourceNode | null = null;
+  private startedAt = 0;
 
   constructor(private readonly ctx: AudioContext, private readonly volume: number) {
     this.analyser = ctx.createAnalyser();
@@ -30,6 +31,7 @@ export class TrackListener {
     this.gain.gain.setValueAtTime(0, now);
     this.gain.gain.linearRampToValueAtTime(this.volume, now + 2);
     source.start();
+    this.startedAt = now;
     this.source = source;
     void this.ctx.resume();
   }
@@ -43,6 +45,11 @@ export class TrackListener {
     this.gain.gain.setValueAtTime(this.gain.gain.value, now);
     this.gain.gain.linearRampToValueAtTime(0, now + fadeSec);
     source.stop(now + fadeSec + 0.05);
+  }
+
+  position(): number | null {
+    const duration = this.source?.buffer?.duration;
+    return duration ? (this.ctx.currentTime - this.startedAt) % duration : null;
   }
 
   read(): Spectrum {

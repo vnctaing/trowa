@@ -1,28 +1,17 @@
-import { STAGES, type DetectedNote, type Score, type StageId } from '../../domain';
+import { STAGES, type Score, type StageId } from '../../domain';
 import { TrackListener } from '../../particles/audio';
 import type { Formation, StaffDrawing } from '../../particles/formations';
+import { Song, sourceSeed } from '../../particles/song';
 import type { Mount } from '../context';
 import { el } from '../dom';
 import { classify } from '../errors';
 import { firstMeasure, measureTicks } from '../music';
 
-const CLOUD_BEFORE_NEBULA_MS = 1600;
+const STAGE_DWELL_MS = 1800;
+const PACING_TICK_MS = 150;
 const LANDING_MS = 1500;
 const LANDING_HOLD_MS = 1300;
 const TRACK_VOLUME = 0.12;
-const NOTATING_HEADS = 9;
-
-type Visuals = { audioAt: number | null; notes: readonly DetectedNote[] | null; landed: Score | null };
-
-function detectedStaff(notes: readonly DetectedNote[] | null): StaffDrawing {
-  const heads = (notes ?? []).slice(0, NOTATING_HEADS).map((n, i, all) => ({
-    midi: n.midi,
-    x: all.length > 1 ? i / (all.length - 1) : 0.5,
-    filled: true,
-    stem: true,
-  }));
-  return { heads, keyFifths: 0, meter: null, barlines: false };
-}
 
 function firstBarStaff(score: Score): StaffDrawing {
   const bar = measureTicks(score);
@@ -36,43 +25,31 @@ function firstBarStaff(score: Score): StaffDrawing {
   return { heads, keyFifths: score.keyFifths, meter: [score.beatsPerBar, score.beatUnit], barlines: true };
 }
 
-function formationFor(stage: StageId, v: Visuals, now: number): { key: string; formation: Formation } {
-  if (v.landed) return { key: 'landed', formation: { kind: 'staff', drawing: firstBarStaff(v.landed) } };
+function songFormation(stage: Exclude<StageId, 'notating'>, song: Song): Formation {
   switch (stage) {
     case 'extracting':
-      return v.audioAt === null || now - v.audioAt < CLOUD_BEFORE_NEBULA_MS
-        ? { key: 'cloud', formation: { kind: 'cloud' } }
-        : { key: 'nebula', formation: { kind: 'nebula' } };
+      return { kind: 'nebula', song };
     case 'separating':
-      return { key: 'streams', formation: { kind: 'streams' } };
+      return { kind: 'streams', song };
     case 'detecting':
-      return { key: `lanes:${v.notes?.length ?? 0}`, formation: { kind: 'lanes', notes: v.notes ?? [] } };
-    case 'notating':
-      return { key: `staff:${v.notes?.length ?? 0}`, formation: { kind: 'staff', drawing: detectedStaff(v.notes) } };
+      return { kind: 'roll', song };
   }
 }
 
-function stageLabel(stage: StageId): string {
-  return STAGES.find((s) => s.id === stage)?.label ?? '';
-}
+const stageIndex = (stage: StageId) => STAGES.findIndex((s) => s.id === stage);
 
 export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
   const field = ctx.field.acquire();
   const listener = new TrackListener(ctx.audio(), TRACK_VOLUME);
+  const song = new Song(sourceSeed(initial.source), () => listener.position());
   field.listen(listener);
+  field.reseed(song.seed);
 
-  const visuals: Visuals = { audioAt: null, notes: null, landed: null };
   let state = initial;
-  let formationKey = '';
+  let shown: { stage: StageId; since: number } = { stage: initial.stage, since: performance.now() };
+  let landing = false;
   const timers: number[] = [];
   const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
-
-  const applyFormation = () => {
-    const { key, formation } = formationFor(state.stage, visuals, performance.now());
-    if (key === formationKey) return;
-    formationKey = key;
-    field.setFormation(formation, key === 'landed' ? LANDING_MS : 1100);
-  };
 
   const labelBox = el('div', { class: 'stage-label', 'aria-live': 'polite' });
   const progress = el('div', { class: 'progress-line' });
@@ -89,6 +66,36 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
     requestAnimationFrame(() => requestAnimationFrame(() => span.classList.remove('is-entering')));
   };
 
+  const render = () => {
+    const index = stageIndex(shown.stage);
+    const fraction = landing ? 1 : shown.stage === state.stage ? Math.min(1, state.fraction) : 1;
+    progress.style.transform = `scaleX(${(index + fraction) / STAGES.length})`;
+    screen.dataset.phase = state.landed ? 'landing' : state.stage;
+    screen.dataset.shown = landing ? 'landing' : shown.stage;
+    showLabel(STAGES[index]?.label ?? '');
+  };
+
+  const show = (stage: StageId) => {
+    shown = { stage, since: performance.now() };
+    if (stage !== 'notating') field.setFormation(songFormation(stage, song));
+    render();
+  };
+
+  const land = (score: Score) => {
+    landing = true;
+    field.setFormation({ kind: 'staff', drawing: firstBarStaff(score) }, LANDING_MS);
+    render();
+    later(LANDING_MS + LANDING_HOLD_MS, () => ctx.dispatch({ type: 'landingFinished' }));
+  };
+
+  const pace = () => {
+    if (landing || performance.now() - shown.since < STAGE_DWELL_MS) return;
+    const target = state.landed ? 'notating' : state.stage;
+    if (stageIndex(shown.stage) < stageIndex(target)) show(STAGES[stageIndex(shown.stage) + 1]!.id);
+    else if (shown.stage === 'notating' && state.landed) land(state.landed.score);
+  };
+  const pacing = window.setInterval(pace, PACING_TICK_MS);
+
   const abort = new AbortController();
   ctx.pipeline
     .runPipeline(
@@ -104,12 +111,11 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
             return;
           case 'audio':
             listener.play(event.buffer);
-            visuals.audioAt = performance.now();
-            later(CLOUD_BEFORE_NEBULA_MS + 20, applyFormation);
             return;
-          case 'notes':
-            visuals.notes = event.notes;
-            applyFormation();
+          case 'signature':
+          case 'lead':
+          case 'notesFound':
+            song.apply(event, performance.now() / 1000);
             return;
         }
       },
@@ -117,9 +123,7 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
     )
     .then((score) => {
       if (abort.signal.aborted) return;
-      visuals.landed = score;
       ctx.dispatch({ type: 'landed', rendered: { score, musicXml: ctx.pipeline.toMusicXml(score) } });
-      later(LANDING_MS + LANDING_HOLD_MS, () => ctx.dispatch({ type: 'landingFinished' }));
     })
     .catch((err: unknown) => {
       const failure = classify(err);
@@ -128,32 +132,28 @@ export const mountTranslating: Mount<'translating'> = (root, initial, ctx) => {
 
   const update = (next: typeof state) => {
     state = next;
-    const index = STAGES.findIndex((s) => s.id === next.stage);
-    const overall = next.landed ? 1 : (index + Math.min(1, next.fraction)) / STAGES.length;
-    progress.style.transform = `scaleX(${overall})`;
-    screen.dataset.phase = next.landed ? 'landing' : next.stage;
-    showLabel(stageLabel(next.stage));
-    applyFormation();
+    render();
   };
 
   const screen = el('section', { class: 'screen translating-screen' }, [
-      el('div', { class: 'track-title', text: initial.source.title }),
-      el('button', {
-        class: 'btn btn-quiet cancel',
-        type: 'button',
-        text: 'Cancel',
-        onclick: () => ctx.dispatch({ type: 'startedOver' }),
-      }),
-      el('div', { class: 'stage-dock' }, [labelBox, el('div', { class: 'progress-track' }, [progress])]),
+    el('div', { class: 'track-title', text: initial.source.title }),
+    el('button', {
+      class: 'btn btn-quiet cancel',
+      type: 'button',
+      text: 'Cancel',
+      onclick: () => ctx.dispatch({ type: 'startedOver' }),
+    }),
+    el('div', { class: 'stage-dock' }, [labelBox, el('div', { class: 'progress-track' }, [progress])]),
   ]);
   root.replaceChildren(screen);
-  update(initial);
+  show(initial.stage);
 
   return {
     update,
     unmount() {
       abort.abort();
       timers.forEach(clearTimeout);
+      clearInterval(pacing);
       listener.stop(0.9);
       field.listen(null);
     },
