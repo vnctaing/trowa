@@ -27,10 +27,20 @@ function makeSprite(color: string): HTMLCanvasElement {
   return c;
 }
 
-function randoms(n: number): Float32Array {
-  const arr = new Float32Array(n);
-  for (let i = 0; i < n; i++) arr[i] = Math.random();
-  return arr;
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let z = state;
+    z = Math.imul(z ^ (z >>> 15), z | 1);
+    z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+    return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fillSeeds(seeds: Seeds, seed: number): void {
+  const next = seededRandom(seed);
+  for (const arr of [seeds.a, seeds.b, seeds.c, seeds.d]) for (let i = 0; i < arr.length; i++) arr[i] = next();
 }
 
 export class ParticleField {
@@ -43,9 +53,10 @@ export class ParticleField {
   private readonly fromX: Float32Array;
   private readonly fromY: Float32Array;
   private readonly fromA: Float32Array;
-  private readonly placed: Placed = { x: 0, y: 0, alpha: 0 };
-  private readonly sample: Sample = { i: 0, t: 0, since: 0, band: 0 };
+  private readonly placed: Placed = { x: 0, y: 0, alpha: 0, glow: 0 };
+  private readonly sample: Sample = { i: 0, t: 0, now: 0, since: 0, calm: false, bands: new Float32Array(BANDS) };
   private readonly idleSpectrum: Spectrum = { bands: new Float32Array(BANDS) };
+  private readonly calmBands = new Float32Array(BANDS).fill(CALM_BAND);
   private readonly observer: ResizeObserver;
   private geometry: Geometry = { w: 1, h: 1 };
   private formation: Formation = { kind: 'idle' };
@@ -64,7 +75,8 @@ export class ParticleField {
     if (!ctx) throw new Error('Canvas 2D is unavailable');
     this.ctx = ctx;
     const n = config.count;
-    this.seeds = { a: randoms(n), b: randoms(n), c: randoms(n), d: randoms(n) };
+    this.seeds = { a: new Float32Array(n), b: new Float32Array(n), c: new Float32Array(n), d: new Float32Array(n) };
+    fillSeeds(this.seeds, Math.floor(Math.random() * 2 ** 32));
     this.x = new Float32Array(n);
     this.y = new Float32Array(n);
     this.a = new Float32Array(n);
@@ -81,6 +93,10 @@ export class ParticleField {
 
   listen(listener: TrackListener | null): void {
     this.listener = listener;
+  }
+
+  reseed(seed: number): void {
+    fillSeeds(this.seeds, seed);
   }
 
   setFormation(formation: Formation, durationMs = 1100): void {
@@ -162,14 +178,16 @@ export class ParticleField {
     const out = this.placed;
     const reactivity = reduced ? 0 : this.current.reactivity;
     sample.t = t;
+    sample.now = now / 1000;
+    sample.calm = reduced;
+    sample.bands = reduced ? this.calmBands : spectrum.bands;
     sample.since = reduced ? 60 : elapsed / 1000;
     const span = this.durationMs + (reduced ? 0 : STAGGER_MS);
 
     for (let i = 0; i < config.count; i++) {
-      const band = reduced ? CALM_BAND : (spectrum.bands[i % BANDS] ?? 0);
       sample.i = i;
-      sample.band = band;
       this.current.place(sample, seeds, out);
+      const band = out.glow;
       const seedA = seeds.a[i] ?? 0;
       const seedD = seeds.d[i] ?? 0;
       const delay = reduced ? 0 : (seeds.c[i] ?? 0) * STAGGER_MS;
