@@ -48,6 +48,10 @@ function pick(arr: Float32Array, i: number): number {
   return arr[i] ?? 0;
 }
 
+function morphClock(s: Sample): number {
+  return s.calm ? Infinity : s.now;
+}
+
 function bandAt(bands: Float32Array, u: number): number {
   return bands[Math.min(BANDS - 1, Math.max(0, Math.floor(u * BANDS)))] ?? 0;
 }
@@ -71,12 +75,13 @@ const nebula: Spec<{ kind: 'nebula'; song: Song }> = {
     return (s, { a, b, c, d }, out) => {
       const ra = pick(a, s.i), rb = pick(b, s.i), rc = pick(c, s.i), rd = pick(d, s.i);
       const u = rb ** 0.8;
-      const energy = song.energyAt(u, s.now);
-      const twist = 2.2 + 3.2 * song.brightnessAt(u, s.now);
+      const now = morphClock(s);
+      const energy = song.energyAt(u, now);
+      const twist = 2.2 + 3.2 * song.brightnessAt(u, now);
       const band = bandAt(s.bands, u);
-      const beat = song.beatSec;
-      const swell = 0.5 - 0.5 * Math.cos((TAU * s.t) / (beat * 2));
-      const spin = (s.t * TAU) / (beat * 32);
+      const beats = song.beatsAt(s.t);
+      const swell = 0.5 - 0.5 * Math.cos((TAU * beats) / 2);
+      const spin = (TAU * beats) / 32;
       const arm = Math.floor(rd * arms);
       const angle = (arm * TAU) / arms + u * twist + spin + (ra - 0.5) * (0.2 + 1.1 * energy) * (1 - 0.5 * u);
       const rad = r * (0.04 + 0.96 * u) * (1 + 0.03 * swell + 0.1 * band);
@@ -89,6 +94,7 @@ const nebula: Spec<{ kind: 'nebula'; song: Song }> = {
 };
 
 const STREAM_FADE_SEC = 2.6;
+const STREAM_WIDTHS_PER_BEAT = 0.0108;
 
 const streams: Spec<{ kind: 'streams'; song: Song }> = {
   reactivity: 0.4,
@@ -97,10 +103,10 @@ const streams: Spec<{ kind: 'streams'; song: Song }> = {
     return (s, { a, b, c, d }, out) => {
       const ra = pick(a, s.i), rb = pick(b, s.i), rc = pick(c, s.i), rd = pick(d, s.i);
       const lead = rc < 0.5;
-      const flow = (0.018 * 60) / song.beatSec / 100;
-      const u = frac(ra + s.t * flow * (lead ? 1 : 0.85));
-      const energy = song.energyAt(u, s.now);
-      const share = song.leadShareAt(u, s.now);
+      const u = frac(ra + song.beatsAt(s.t) * STREAM_WIDTHS_PER_BEAT * (lead ? 1 : 0.85));
+      const now = morphClock(s);
+      const energy = song.energyAt(u, now);
+      const share = song.leadShareAt(u, now);
       const amount = energy * (lead ? share : 1 - share);
       const parting = easeInOut(s.since / STREAM_FADE_SEC);
       const band = lead ? bandAt(s.bands, 0.4 + 0.3 * rd) : bandAt(s.bands, 0.35 * rd);
@@ -131,8 +137,8 @@ const roll: Spec<{ kind: 'roll'; song: Song }> = {
     const pitchU = (midi: number) => Math.min(1, Math.max(0, (midi - ROLL_LOW) / (ROLL_HIGH - ROLL_LOW)));
     const laneY = (midi: number) => bottom - pitchU(midi) * (bottom - top);
     const octaves = (ROLL_HIGH - ROLL_LOW) / 12 + 1;
-    const shownAt = performance.now() / 1000;
     return (s, { a, b, c, d }, out) => {
+      const shownAt = s.now - s.since;
       const ra = pick(a, s.i), rb = pick(b, s.i), rc = pick(c, s.i), rd = pick(d, s.i);
       const duration = song.durationSec;
       const front = Math.min(1, song.throughSec / duration);
@@ -160,14 +166,13 @@ const roll: Spec<{ kind: 'roll'; song: Song }> = {
       const sec = Math.min(note.onsetSec + note.durSec, Math.max(note.onsetSec, u * duration));
       const noteX = left + (sec / duration) * width;
       const noteY = laneY(note.midi) + (rd - 0.5) * 2.4;
-      const p = easeInOut((s.now - Math.max(note.foundAt, shownAt + (sec / duration) * CATCH_UP_SEC)) / REVEAL_SEC);
-      const travel = s.calm ? 1 : p;
+      const p = s.calm ? 1 : easeInOut((s.now - Math.max(note.foundAt, shownAt + (sec / duration) * CATCH_UP_SEC)) / REVEAL_SEC);
       const playhead = song.playhead();
       const hearing = playhead === null ? 0 : Math.exp(-(((playhead - sec) / 0.35) ** 2));
       const band = bandAt(s.bands, pitchU(note.midi));
-      out.x = waitX + (noteX - waitX) * travel;
-      out.y = waitY + (noteY - waitY) * travel;
-      out.alpha = (s.calm ? 0 : 0.07 * (1 - p)) + p * (0.16 + 0.34 * Math.min(1, note.amplitude * 1.6) + 0.6 * hearing);
+      out.x = waitX + (noteX - waitX) * p;
+      out.y = waitY + (noteY - waitY) * p;
+      out.alpha = 0.07 * (1 - p) + p * (0.16 + 0.34 * Math.min(1, note.amplitude * 1.6) + 0.6 * hearing);
       out.glow = Math.max(band, hearing);
     };
   },

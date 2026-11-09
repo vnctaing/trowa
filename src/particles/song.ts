@@ -62,8 +62,17 @@ export class Song {
     return this.signature?.durationSec ?? 1;
   }
 
-  get beatSec(): number {
+  private get beatSec(): number {
     return 60 / (this.signature?.bpm ?? UNKNOWN_BPM);
+  }
+
+  beatsAt(t: number): number {
+    const before = (t * UNKNOWN_BPM) / 60;
+    if (!this.signature) return before;
+    const gain = 1 / this.beatSec - UNKNOWN_BPM / 60;
+    const since = Math.max(0, t - this.signatureAt);
+    const ramped = since < MORPH_SEC ? (since * since) / (2 * MORPH_SEC) : since - MORPH_SEC / 2;
+    return before + gain * ramped;
   }
 
   get noteCount(): number {
